@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::BufRead;
 use std::fmt;
+use std::str::FromStr;
 
 /// A rust implementation of assembler for uxn cpu
 #[derive(Parser)]
@@ -38,12 +39,12 @@ fn main() {
         },
     };
 
-    let input = BufReader::new(fp).split(b' ').map(|x| {
-        String::from_utf8(x.unwrap()).unwrap()
-    });
-
+    let input = BufReader::new(fp).lines().map(|l| {
+        l.unwrap().split_whitespace().map(
+            |w| { String::from_str(w).unwrap() }).collect::<Vec::<_>>()
+    }).flatten();
 
     for i in input {
-        println!("{}", i);
+        println!("**{}**", i);
     }
 }
