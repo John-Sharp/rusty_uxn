@@ -31,6 +31,7 @@ impl fmt::Display for CustomError {
 #[derive(Debug)]
 enum OpCode {
     Brk,
+    Deo,
 }
 
 #[derive(Debug)]
@@ -57,6 +58,8 @@ impl FromStr for OpObject {
             op_code: OpCode::Brk},
             "LIT" => OpObject{keep: true, ret: false, short: false,
             op_code: OpCode::Brk},
+            "DEO" => OpObject{keep: false, ret: false, short: false,
+            op_code: OpCode::Deo},
             _ => { return Err(ParseOpObjectError{}) },
         };
 
@@ -66,13 +69,13 @@ impl FromStr for OpObject {
     }
 }
 
-
-
 #[derive(Debug)]
 enum UxnToken {
     Op(OpObject),
     MacroInvocation(String),
     PadAbs(u16),
+    RawByte(u8),
+    RawShort(u16),
 }
 
 impl FromStr for UxnToken {
@@ -81,6 +84,18 @@ impl FromStr for UxnToken {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(op) = s.parse::<OpObject>() {
             return Ok(UxnToken::Op(op));
+        }
+
+        if s.len() == 2 {
+            if let Ok(raw) = u8::from_str_radix(s, 16) {
+                return Ok(UxnToken::RawByte(raw));
+            }
+        }
+
+        if s.len() == 4 {
+            if let Ok(raw) = u16::from_str_radix(s, 16) {
+                return Ok(UxnToken::RawShort(raw));
+            }
         }
 
         if &s[0..1] == "|" {
