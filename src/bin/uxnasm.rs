@@ -5,6 +5,8 @@ use std::io::BufRead;
 use std::fmt;
 use std::str::FromStr;
 use std::convert::Infallible;
+use std::io::Write; 
+
 
 /// A rust implementation of assembler for uxn cpu
 #[derive(Parser)]
@@ -157,7 +159,23 @@ fn main() {
 
 
 
-    for i in input {
-        println!("**{:?}**", i);
+    // for i in input.iter() {
+    //     println!("**{:?}**", i);
+    // }
+
+    let mut fp = match File::create(args.dst_path.as_path()) {
+        Ok(fp) => fp,
+        Err(err) => {
+            println!("Error opening destination file {}",
+                     args.dst_path.as_path().display());
+            std::process::exit(1);
+        },
+
+    };
+
+    if let Err(err) = fp.write(&[0x80, 0x68, 0x80, 0x18, 0x17]) {
+            println!("Error writing to file {:?}",
+                     err);
+            std::process::exit(1);
     }
 }
