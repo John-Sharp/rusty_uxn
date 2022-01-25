@@ -80,6 +80,28 @@ enum UxnToken {
     RawShort(u16),
 }
 
+impl UxnToken {
+    fn get_bytes(&self) -> Vec::<u8> {
+        match self {
+            UxnToken::Op(_) => return vec!(0xff, 0xee),
+            UxnToken::MacroInvocation(_) => return vec!(0xaa, 0xbb),
+            UxnToken::PadAbs(_) => return vec!(0xaa, 0xbb),
+            UxnToken::RawByte(b) => return vec!(*b),
+            UxnToken::RawShort(_) => return vec!(0xdd,),
+        }
+    }
+
+    fn num_bytes(&self) -> u16 {
+        match self {
+            UxnToken::Op(_) => return 0x1,
+            UxnToken::MacroInvocation(_) => return 0xff,
+            UxnToken::PadAbs(n) => return *n,
+            UxnToken::RawByte(b) => return 0x1,
+            UxnToken::RawShort(n) => return 0x2,
+        }
+    }
+}
+
 impl FromStr for UxnToken {
     type Err = Infallible;
 
@@ -127,6 +149,7 @@ fn main() {
     };
 
     let mut in_comment = false;
+    let mut prog_loc = 0;
     let input = BufReader::new(fp).lines().map(|l| {
         let l = l.unwrap();
         let l = l.replace("{", " { ");
@@ -152,7 +175,24 @@ fn main() {
         }
         return Some(s);
     })
-    .map(|t| t.parse::<UxnToken>().unwrap());
+    .map(|t| {
+        let ret = t.parse::<UxnToken>().unwrap();
+
+        if let UxnToken::PadAbs(n) = ret {
+            if n < prog_loc {
+                println!("Error in program: absolute padding to area of program already written to");
+                std::process::exit(1);
+            }
+
+            prog_loc = ret.num_bytes();
+        } else {
+            // TODO error if try to write to zero page
+            prog_loc += ret.num_bytes();
+        }
+
+        return ret;
+    });
+
 
     // go through program, collect macros, expand macros when found in main program, collect labels
     // go through program, write to file, substitute labels
@@ -173,9 +213,13 @@ fn main() {
 
     };
 
-    if let Err(err) = fp.write(&[0x80, 0x68, 0x80, 0x18, 0x17]) {
+    for i in input {
+        if let Err(err) = fp.write(&i.get_bytes()) {
             println!("Error writing to file {:?}",
                      err);
             std::process::exit(1);
+        }
     }
+
+    println!("the program is of length: {}", prog_loc);
 }
