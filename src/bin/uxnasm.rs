@@ -44,6 +44,35 @@ struct OpObject {
     op_code: OpCode,
 }
 
+impl OpObject {
+    fn get_bytes(&self) -> Vec::<u8> {
+        let byte = match self.op_code {
+            OpCode::Brk => 0x00,
+            OpCode::Deo => 0x17,
+        };
+
+        let byte = if self.keep {
+            byte | 0b10000000
+        } else {
+            byte
+        };
+
+        let byte = if self.ret {
+            byte | 0b01000000
+        } else {
+            byte
+        };
+
+        let byte = if self.short {
+            byte | 0b00100000
+        } else {
+            byte
+        };
+
+        return vec!(byte);
+    }
+}
+
 #[derive(Debug)]
 struct ParseOpObjectError {}
 
@@ -83,7 +112,7 @@ enum UxnToken {
 impl UxnToken {
     fn get_bytes(&self) -> Vec::<u8> {
         match self {
-            UxnToken::Op(_) => return vec!(0xff, 0xee),
+            UxnToken::Op(o) => return o.get_bytes(),
             UxnToken::MacroInvocation(_) => return vec!(0xaa, 0xbb),
             UxnToken::PadAbs(n) => return vec!(0x00; (*n).into()),
             UxnToken::RawByte(b) => return vec!(*b),
