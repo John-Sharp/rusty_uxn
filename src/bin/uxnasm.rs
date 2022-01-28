@@ -107,6 +107,8 @@ enum UxnToken {
     PadAbs(u16),
     RawByte(u8),
     RawShort(u16),
+    LitByte(u8),
+    LitShort(u16),
 }
 
 impl UxnToken {
@@ -117,6 +119,11 @@ impl UxnToken {
             UxnToken::PadAbs(n) => return vec!(0x00; (*n).into()),
             UxnToken::RawByte(b) => return vec!(*b),
             UxnToken::RawShort(_) => return vec!(0xdd,),
+            UxnToken::LitByte(b) => return vec!(0x80, *b),
+            UxnToken::LitShort(s) => {
+                let bytes = s.to_be_bytes();
+                return vec!(0xA0, bytes[0], bytes[1]);
+            }
         }
     }
 
@@ -127,6 +134,8 @@ impl UxnToken {
             UxnToken::PadAbs(n) => return *n,
             UxnToken::RawByte(b) => return 0x1,
             UxnToken::RawShort(n) => return 0x2,
+            UxnToken::LitByte(b) => return 0x1,
+            UxnToken::LitShort(n) => return 0x2,
         }
     }
 }
@@ -153,12 +162,36 @@ impl FromStr for UxnToken {
 
         if &s[0..1] == "|" {
             if s.len() < 2 {
+                // TODO replace these with parse errors
                 panic!();
             }
 
             if let Ok(pad_val) = u16::from_str_radix(&s[1..], 16) {
                 return Ok(UxnToken::PadAbs(pad_val));
             }
+        }
+
+        if &s[0..1] == "#" {
+            let s = &s[1..]; 
+            match s.len() {
+                2 => {
+                    if let Ok(val) = u8::from_str_radix(s, 16) {
+                        return Ok(UxnToken::LitByte(val));
+                    } else {
+                        panic!();
+                    }
+                },
+                4 => {
+                    if let Ok(val) = u16::from_str_radix(s, 16) {
+                        return Ok(UxnToken::LitShort(val));
+                    } else {
+                        panic!();
+                    }
+                },
+                _ => {
+                    panic!();
+                }
+            };
         }
 
         return Ok(UxnToken::MacroInvocation(s.to_owned()));
@@ -206,7 +239,6 @@ fn main() {
     })
     .map(|t| {
         let ret = t.parse::<UxnToken>().unwrap();
-        println!("prog loc is {}", prog_loc);
 
         if let UxnToken::PadAbs(n) = ret {
             if n < prog_loc {
@@ -267,6 +299,4 @@ fn main() {
 
         bytes_encountered += next_token_bytes.len();
     }
-
-    println!("the program is of length: {}", prog_loc);
 }
