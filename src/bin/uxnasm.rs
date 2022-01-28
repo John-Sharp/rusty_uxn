@@ -85,7 +85,7 @@ impl UxnToken {
         match self {
             UxnToken::Op(_) => return vec!(0xff, 0xee),
             UxnToken::MacroInvocation(_) => return vec!(0xaa, 0xbb),
-            UxnToken::PadAbs(_) => return vec!(0xaa, 0xbb),
+            UxnToken::PadAbs(n) => return vec!(0x00; (*n).into()),
             UxnToken::RawByte(b) => return vec!(*b),
             UxnToken::RawShort(_) => return vec!(0xdd,),
         }
@@ -127,7 +127,7 @@ impl FromStr for UxnToken {
                 panic!();
             }
 
-            if let Ok(pad_val) = s[1..].parse::<u16>() {
+            if let Ok(pad_val) = u16::from_str_radix(&s[1..], 16) {
                 return Ok(UxnToken::PadAbs(pad_val));
             }
         }
@@ -177,6 +177,7 @@ fn main() {
     })
     .map(|t| {
         let ret = t.parse::<UxnToken>().unwrap();
+        println!("prog loc is {}", prog_loc);
 
         if let UxnToken::PadAbs(n) = ret {
             if n < prog_loc {
@@ -185,8 +186,15 @@ fn main() {
             }
 
             prog_loc = ret.num_bytes();
+
+
         } else {
-            // TODO error if try to write to zero page
+
+            if prog_loc < 0x100 {
+                println!("Error in program: writing to zero page");
+                std::process::exit(1);
+            }
+            
             prog_loc += ret.num_bytes();
         }
 
@@ -196,12 +204,6 @@ fn main() {
 
     // go through program, collect macros, expand macros when found in main program, collect labels
     // go through program, write to file, substitute labels
-
-
-
-    // for i in input.iter() {
-    //     println!("**{:?}**", i);
-    // }
 
     let mut fp = match File::create(args.dst_path.as_path()) {
         Ok(fp) => fp,
@@ -213,12 +215,28 @@ fn main() {
 
     };
 
+    let mut bytes_encountered = 0;
     for i in input {
-        if let Err(err) = fp.write(&i.get_bytes()) {
-            println!("Error writing to file {:?}",
-                     err);
-            std::process::exit(1);
+
+        let next_token_bytes = i.get_bytes();
+
+        let bytes_to_write = if bytes_encountered + next_token_bytes.len() < 0x100 {
+            0
+        } else if bytes_encountered < 0x100 {
+            bytes_encountered + next_token_bytes.len() - 0x100
+        } else {
+            next_token_bytes.len()
+        };
+
+        if bytes_to_write > 0 {
+            if let Err(err) = fp.write(&next_token_bytes[(next_token_bytes.len()-bytes_to_write)..]) {
+                println!("Error writing to file {:?}",
+                         err);
+                std::process::exit(1);
+            }
         }
+
+        bytes_encountered += next_token_bytes.len();
     }
 
     println!("the program is of length: {}", prog_loc);
