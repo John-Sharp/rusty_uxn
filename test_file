@@ -1,2 +1,2 @@
 ( hello.tal )
-|0100 #6818 DEO
+|0100 LIT 'h #18 DEO

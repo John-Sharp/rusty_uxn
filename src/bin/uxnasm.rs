@@ -132,10 +132,10 @@ impl UxnToken {
             UxnToken::Op(_) => return 0x1,
             UxnToken::MacroInvocation(_) => return 0xff,
             UxnToken::PadAbs(n) => return *n,
-            UxnToken::RawByte(b) => return 0x1,
-            UxnToken::RawShort(n) => return 0x2,
-            UxnToken::LitByte(b) => return 0x1,
-            UxnToken::LitShort(n) => return 0x2,
+            UxnToken::RawByte(_) => return 0x1,
+            UxnToken::RawShort(_) => return 0x2,
+            UxnToken::LitByte(_) => return 0x1,
+            UxnToken::LitShort(_) => return 0x2,
         }
     }
 }
@@ -194,6 +194,22 @@ impl FromStr for UxnToken {
             };
         }
 
+        
+        if &s[0..1] == "'" {
+            if s.len() > 2 {
+                panic!();
+            }
+
+            let s = (&s[1..]).as_bytes();
+
+            if s[0] > 0x7f {
+                // not ascii
+                panic!();
+            }
+
+            return Ok(UxnToken::RawByte(s[0]));
+        }
+
         return Ok(UxnToken::MacroInvocation(s.to_owned()));
     }
 }
@@ -203,7 +219,7 @@ fn main() {
 
     let fp = match File::open(args.src_path.as_path()) {
         Ok(fp) => fp,
-        Err(err) => {
+        Err(_err) => {
             println!("Error opening file {}",
                      args.src_path.as_path().display());
             std::process::exit(1);
@@ -268,7 +284,7 @@ fn main() {
 
     let mut fp = match File::create(args.dst_path.as_path()) {
         Ok(fp) => fp,
-        Err(err) => {
+        Err(_err) => {
             println!("Error opening destination file {}",
                      args.dst_path.as_path().display());
             std::process::exit(1);
