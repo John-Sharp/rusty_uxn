@@ -1,4 +1,3 @@
-use clap::Parser;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::BufRead;
@@ -7,20 +6,7 @@ use std::str::FromStr;
 use std::convert::Infallible;
 use std::io::Write; 
 use std::collections::HashMap;
-
-/// A rust implementation of assembler for uxn cpu
-#[derive(Parser)]
-struct Cli {
-
-    /// The path to the assembly file
-    #[clap(parse(from_os_str))]
-    src_path: std::path::PathBuf,
-
-    /// The path to the output rom
-    #[clap(parse(from_os_str))]
-    dst_path: std::path::PathBuf,
-}
-
+use clap::Parser;
 
 #[derive(Debug)]
 struct CustomError(String);
@@ -105,6 +91,7 @@ enum UxnToken {
     Op(OpObject),
     MacroInvocation(String),
     PadAbs(u16),
+    PadRel(u16),
     RawByte(u8),
     RawShort(u16),
     LitByte(u8),
@@ -114,11 +101,16 @@ enum UxnToken {
 }
 
 impl UxnToken {
-    fn get_bytes(&self, labels: &HashMap<String, u16>) -> Vec::<u8> {
+    fn get_bytes(&self, prog_counter: u16, labels: &HashMap<String, u16>) -> Vec::<u8> {
         match self {
             UxnToken::Op(o) => return o.get_bytes(),
             UxnToken::MacroInvocation(_) => return vec!(0xaa, 0xbb),
-            UxnToken::PadAbs(n) => return vec!(0x00; (*n).into()),
+            UxnToken::PadAbs(n) => {
+                let bytes_to_write = *n - prog_counter;
+
+                return vec!(0x00; bytes_to_write.into());
+            },
+            UxnToken::PadRel(n) => return vec!(0x00; (*n).into()),
             UxnToken::RawByte(b) => return vec!(*b),
             UxnToken::RawShort(_) => return vec!(0xdd,),
             UxnToken::LitByte(b) => return vec!(0x80, *b),
@@ -139,11 +131,12 @@ impl UxnToken {
         }
     }
 
-    fn num_bytes(&self) -> u16 {
+    fn num_bytes(&self, prog_counter: u16) -> u16 {
         match self {
             UxnToken::Op(_) => return 0x1,
             UxnToken::MacroInvocation(_) => return 0xff,
-            UxnToken::PadAbs(n) => return *n,
+            UxnToken::PadAbs(n) => return *n - prog_counter,
+            UxnToken::PadRel(n) => return *n,
             UxnToken::RawByte(_) => return 0x1,
             UxnToken::RawShort(_) => return 0x2,
             UxnToken::LitByte(_) => return 0x1,
@@ -182,6 +175,17 @@ impl FromStr for UxnToken {
 
             if let Ok(pad_val) = u16::from_str_radix(&s[1..], 16) {
                 return Ok(UxnToken::PadAbs(pad_val));
+            }
+        }
+
+        if &s[0..1] == "$" {
+            if s.len() < 2 {
+                // TODO replace these with parse errors
+                panic!();
+            }
+
+            if let Ok(pad_val) = u16::from_str_radix(&s[1..], 16) {
+                return Ok(UxnToken::PadRel(pad_val));
             }
         }
 
@@ -295,8 +299,11 @@ impl Asm {
                         std::process::exit(1);
                     }
 
-                    prog_loc = ret.num_bytes();
+                    prog_loc += ret.num_bytes(prog_loc);
                 },
+                UxnToken::PadRel(_) => {
+                    prog_loc += ret.num_bytes(prog_loc);
+                }
                 UxnToken::LabelDefine(ref label_name) => {
                     labels.insert(
                         label_name.clone(),
@@ -308,7 +315,7 @@ impl Asm {
                         std::process::exit(1);
                     }
 
-                    prog_loc += ret.num_bytes();
+                    prog_loc += ret.num_bytes(prog_loc);
                 },
             };
 
@@ -324,10 +331,10 @@ impl Asm {
     where
         W: Write,
     {
-        let mut bytes_encountered = 0;
+        let mut bytes_encountered = 0usize;
         for i in &self.program {
 
-            let next_token_bytes = i.get_bytes(&self.labels);
+            let next_token_bytes = i.get_bytes(bytes_encountered.try_into().unwrap(), &self.labels);
 
             let bytes_to_write = if bytes_encountered + next_token_bytes.len() < 0x100 {
                 0
@@ -351,7 +358,7 @@ impl Asm {
 }
 
 fn main() {
-    let args = Cli::parse();
+    let args = rusty_uxn::uxnasm::Cli::parse();
 
     let fp = match File::open(args.src_path.as_path()) {
         Ok(fp) => fp,
