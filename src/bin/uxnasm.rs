@@ -6,7 +6,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::convert::Infallible;
 use std::io::Write; 
-
+use std::collections::HashMap;
 
 /// A rust implementation of assembler for uxn cpu
 #[derive(Parser)]
@@ -109,10 +109,12 @@ enum UxnToken {
     RawShort(u16),
     LitByte(u8),
     LitShort(u16),
+    LabelDefine(String),
+    RawAbsAddr(String),
 }
 
 impl UxnToken {
-    fn get_bytes(&self) -> Vec::<u8> {
+    fn get_bytes(&self, labels: &HashMap<String, u16>) -> Vec::<u8> {
         match self {
             UxnToken::Op(o) => return o.get_bytes(),
             UxnToken::MacroInvocation(_) => return vec!(0xaa, 0xbb),
@@ -123,7 +125,17 @@ impl UxnToken {
             UxnToken::LitShort(s) => {
                 let bytes = s.to_be_bytes();
                 return vec!(0xA0, bytes[0], bytes[1]);
-            }
+            },
+            UxnToken::LabelDefine(_) => return vec!(),
+            UxnToken::RawAbsAddr(label) => {
+                println!("label is {}", label);
+                if let Some(addr) = labels.get(label) {
+                    let bytes = addr.to_be_bytes();
+                    return vec!(bytes[0], bytes[1]);
+                } else {
+                    panic!();
+                }
+            },
         }
     }
 
@@ -136,6 +148,8 @@ impl UxnToken {
             UxnToken::RawShort(_) => return 0x2,
             UxnToken::LitByte(_) => return 0x1,
             UxnToken::LitShort(_) => return 0x2,
+            UxnToken::LabelDefine(_) => return 0x0,
+            UxnToken::RawAbsAddr(_) => return 0x2,
         }
     }
 }
@@ -210,7 +224,129 @@ impl FromStr for UxnToken {
             return Ok(UxnToken::RawByte(s[0]));
         }
 
+        if &s[0..1] == "@" {
+            if s.len() == 1 {
+                // label with no name
+                panic!();
+            }
+
+            return Ok(UxnToken::LabelDefine((&s[1..]).to_owned()));
+        }
+
+        if &s[0..1] == ":" {
+            if s.len() == 1 {
+                // label with no name
+                panic!();
+            }
+
+            return Ok(UxnToken::RawAbsAddr((&s[1..]).to_owned()));
+        }
+
         return Ok(UxnToken::MacroInvocation(s.to_owned()));
+    }
+}
+
+struct Asm {
+    program: Vec<UxnToken>,
+    labels: HashMap<String, u16>,
+}
+
+impl Asm {
+    fn assemble<I>(input: I) -> Result<Self, ()>
+    where
+        I: Iterator<Item = String>,
+
+    {
+        let mut in_comment = false;
+        let mut prog_loc = 0;
+        let mut labels = HashMap::new();
+
+        let input = input.map(|l| {
+            let l = l.replace("{", " { ");
+            let l = l.replace("}", " } ");
+
+            let l = l.replace("(", " ( ");
+            let l = l.replace(")", " ) ");
+
+            l.split_whitespace().map(
+                |w| { String::from_str(w).unwrap() }).collect::<Vec::<_>>()
+        }).flatten()
+        .filter_map(|s| {
+            if s == "(" {
+                in_comment = true;
+                return None;
+            }
+            let was_in_comment = in_comment;
+            if s == ")" {
+                in_comment = false;
+            }
+            if was_in_comment {
+                return None;
+            }
+            return Some(s);
+        })
+        .map(|t| {
+            let ret = t.parse::<UxnToken>().unwrap();
+
+            match ret {
+                UxnToken::PadAbs(n) => {
+                    if n < prog_loc {
+                        println!("Error in program: absolute padding to area of program already written to");
+                        std::process::exit(1);
+                    }
+
+                    prog_loc = ret.num_bytes();
+                },
+                UxnToken::LabelDefine(ref label_name) => {
+                    labels.insert(
+                        label_name.clone(),
+                        prog_loc);
+                },
+                _ => {
+                    if prog_loc < 0x100 {
+                        println!("Error in program: writing to zero page");
+                        std::process::exit(1);
+                    }
+
+                    prog_loc += ret.num_bytes();
+                },
+            };
+
+            return ret;
+        });
+
+        let program = input.collect::<Vec::<_>>();
+
+        return Ok(Asm{labels, program});
+    }
+
+    fn output<W>(&mut self, mut target: W) 
+    where
+        W: Write,
+    {
+        let mut bytes_encountered = 0;
+        for i in &self.program {
+
+            let next_token_bytes = i.get_bytes(&self.labels);
+
+            let bytes_to_write = if bytes_encountered + next_token_bytes.len() < 0x100 {
+                0
+            } else if bytes_encountered < 0x100 {
+                bytes_encountered + next_token_bytes.len() - 0x100
+            } else {
+                next_token_bytes.len()
+            };
+
+            if bytes_to_write > 0 {
+                if let Err(err) = target.write(&next_token_bytes[(next_token_bytes.len()-bytes_to_write)..]) {
+                    println!("Error writing to file {:?}",
+                             err);
+                    std::process::exit(1);
+                }
+            }
+
+            bytes_encountered += next_token_bytes.len();
+        }
     }
 }
 
@@ -226,58 +362,9 @@ fn main() {
         },
     };
 
-    let mut in_comment = false;
-    let mut prog_loc = 0;
-    let input = BufReader::new(fp).lines().map(|l| {
-        let l = l.unwrap();
-        let l = l.replace("{", " { ");
-        let l = l.replace("}", " } ");
+    let input = BufReader::new(fp).lines().map(|l| l.unwrap());
 
-        let l = l.replace("(", " ( ");
-        let l = l.replace(")", " ) ");
-
-        l.split_whitespace().map(
-            |w| { String::from_str(w).unwrap() }).collect::<Vec::<_>>()
-    }).flatten()
-    .filter_map(|s| {
-        if s == "(" {
-            in_comment = true;
-            return None;
-        }
-        let was_in_comment = in_comment;
-        if s == ")" {
-            in_comment = false;
-        }
-        if was_in_comment {
-            return None;
-        }
-        return Some(s);
-    })
-    .map(|t| {
-        let ret = t.parse::<UxnToken>().unwrap();
-
-        if let UxnToken::PadAbs(n) = ret {
-            if n < prog_loc {
-                println!("Error in program: absolute padding to area of program already written to");
-                std::process::exit(1);
-            }
-
-            prog_loc = ret.num_bytes();
-
-
-        } else {
-
-            if prog_loc < 0x100 {
-                println!("Error in program: writing to zero page");
-                std::process::exit(1);
-            }
-            
-            prog_loc += ret.num_bytes();
-        }
-
-        return ret;
-    });
-
+    let mut input = Asm::assemble(input).unwrap();
 
     // go through program, collect macros, expand macros when found in main program, collect labels
     // go through program, write to file, substitute labels
@@ -292,27 +379,7 @@ fn main() {
 
     };
 
-    let mut bytes_encountered = 0;
-    for i in input {
+    input.output(fp);
 
-        let next_token_bytes = i.get_bytes();
-
-        let bytes_to_write = if bytes_encountered + next_token_bytes.len() < 0x100 {
-            0
-        } else if bytes_encountered < 0x100 {
-            bytes_encountered + next_token_bytes.len() - 0x100
-        } else {
-            next_token_bytes.len()
-        };
-
-        if bytes_to_write > 0 {
-            if let Err(err) = fp.write(&next_token_bytes[(next_token_bytes.len()-bytes_to_write)..]) {
-                println!("Error writing to file {:?}",
-                         err);
-                std::process::exit(1);
-            }
-        }
-
-        bytes_encountered += next_token_bytes.len();
-    }
+    println!("labels: {:?}", input.labels);
 }
