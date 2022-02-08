@@ -15,28 +15,14 @@ impl Asm {
     where
         I: Iterator<Item = String>,
     {
-        let mut in_comment = false;
         let mut prog_loc = 0;
         let mut labels = HashMap::new();
 
         let token_strings = split_to_token_strings(input);
 
-        let input = token_strings
-            .filter_map(|s| {
-                if s == "(" {
-                    in_comment = true;
-                    return None;
-                }
-                let was_in_comment = in_comment;
-                if s == ")" {
-                    in_comment = false;
-                }
-                if was_in_comment {
-                    return None;
-                }
-                return Some(s);
-            })
-            .map(|t| {
+        let token_strings = strip_comments(token_strings);
+
+        let input = token_strings.map(|t| {
                 let ret = t.parse::<UxnToken>().unwrap();
 
                 match ret {
@@ -104,14 +90,14 @@ impl Asm {
     }
 }
 
-struct TokenStrings<I>
+struct StringIter<I>
 where
     I: Iterator<Item = String>,
 {
     inner_iter: I,
 }
 
-impl<I> Iterator for TokenStrings<I>
+impl<I> Iterator for StringIter<I>
 where
     I: Iterator<Item = String>,
 {
@@ -138,7 +124,30 @@ where
             .collect::<Vec<_>>()
     });
 
-    TokenStrings { inner_iter: x }
+    StringIter { inner_iter: x }
+}
+
+fn strip_comments<I>(input: I) -> impl Iterator<Item = String>
+where
+    I: Iterator<Item = String>,
+{
+    let mut in_comment = false;
+    let x = input.filter_map(move |s| {
+        if s == "(" {
+            in_comment = true;
+            return None;
+        }
+        let was_in_comment = in_comment;
+        if s == ")" {
+            in_comment = false;
+        }
+        if was_in_comment {
+            return None;
+        }
+        return Some(s);
+    });
+
+    StringIter { inner_iter: x }
 }
 
 #[cfg(test)]
@@ -160,6 +169,23 @@ mod tests {
             .into_iter()
             .map(|t| t.to_owned())
             .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_strip_comments() {
+        let input = vec![
+            "tokenA", "tokenB", "tokenC", "(", "here", "is", "a", "comment", ")", "tokenG",
+        ]
+        .into_iter()
+        .map(|t| t.to_owned());
+
+        assert_eq!(
+            strip_comments(input.into_iter()).collect::<Vec<_>>(),
+            vec!("tokenA", "tokenB", "tokenC", "tokenG")
+                .into_iter()
+                .map(|t| t.to_owned())
+                .collect::<Vec<_>>()
         );
     }
 }
