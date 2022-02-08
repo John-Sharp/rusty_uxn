@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::str::FromStr;
-use std::iter::Flatten;
-use std::iter::Map;
 
 mod tokens;
 use tokens::UxnToken;
@@ -23,7 +21,8 @@ impl Asm {
 
         let token_strings = split_to_token_strings(input);
 
-        let input = token_strings.filter_map(|s| {
+        let input = token_strings
+            .filter_map(|s| {
                 if s == "(" {
                     in_comment = true;
                     return None;
@@ -44,13 +43,7 @@ impl Asm {
                     UxnToken::PadAbs(n) => {
                         if n < prog_loc {
                             println!(
-                                "Error in
-                                                                                    program:
-                                                                                    absolute
-                                                                                    padding to area
-                                                                                    of program
-                                                                                    already written
-                                                                                    to"
+                                "Error in program: absolute padding to area of program already written to"
                             );
                             std::process::exit(1);
                         }
@@ -65,10 +58,7 @@ impl Asm {
                     }
                     _ => {
                         if prog_loc < 0x100 {
-                            println!(
-                                "Error in program: writing to zero
-                                                                page"
-                            );
+                            println!("Error in program: writing to zero page");
                             std::process::exit(1);
                         }
 
@@ -114,30 +104,16 @@ impl Asm {
     }
 }
 
-struct TokenStrings<I> 
+struct TokenStrings<I>
 where
-I: Iterator<Item=String>
+    I: Iterator<Item = String>,
 {
-    inner_iter: I
+    inner_iter: I,
 }
-
-// impl<I> TokenStrings<I>
-// where
-// I: Iterator<Item=String>
-// {
-//     fn new<J>(input: J) -> Self
-//     where 
-//         J: Iterator<Item=String>
-//     {
-//         // TokenStrings{inner_iter: input.map(|l| { return "boob".to_string(); })}
-//         let x = vec!("hello".to_string(), "world".to_string());
-//         TokenStrings{inner_iter: x.into_iter() }
-//     }
-// }
 
 impl<I> Iterator for TokenStrings<I>
 where
-I: Iterator<Item=String>
+    I: Iterator<Item = String>,
 {
     type Item = String;
 
@@ -146,27 +122,21 @@ I: Iterator<Item=String>
     }
 }
 
-
-fn split_to_token_strings<I>(input: I) -> TokenStrings<I>
-    where
-        I: Iterator<Item = String>,
+fn split_to_token_strings<I>(input: I) -> impl Iterator<Item = String>
+where
+    I: Iterator<Item = String>,
 {
-    // let x = input.map(|l| {
-    //         let l = l.replace("{", " { ");
-    //         let l = l.replace("}", " } ");
+    let x = input.flat_map(|l| {
+        let l = l.replace("{", " { ");
+        let l = l.replace("}", " } ");
 
-    //         let l = l.replace("(", " ( ");
-    //         let l = l.replace(")", " ) ");
+        let l = l.replace("(", " ( ");
+        let l = l.replace(")", " ) ");
 
-    //         l.split_whitespace()
-    //             .map(|w| String::from_str(w).unwrap())
-    //             .collect::<Vec<_>>()
-    //     })
-    // .flatten();
+        l.split_whitespace()
+            .map(|w| String::from_str(w).unwrap())
+            .collect::<Vec<_>>()
+    });
 
-//    TokenStrings::new(input)
-
-    // let x = vec!("hello".to_string(), "world".to_string());
-    // println!("{}", x.into_iter().next().unwrap());
-    TokenStrings{inner_iter: input }
+    TokenStrings { inner_iter: x }
 }
