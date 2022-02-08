@@ -4,58 +4,70 @@ use std::str::FromStr;
 
 mod tokens;
 use tokens::UxnToken;
+use std::convert::Infallible;
 
 pub struct Asm {
     program: Vec<UxnToken>,
     labels: HashMap<String, u16>,
 }
 
+#[derive(Debug)]
+pub enum AsmError {
+    General,
+    AbsPaddingRegression,
+    ZeroPageWrite,
+    TokenParseError, // TODO improve
+}
+
 impl Asm {
-    pub fn assemble<I>(input: I) -> Result<Self, ()>
+    pub fn assemble<I>(input: I) -> Result<Self, AsmError>
     where
         I: Iterator<Item = String>,
     {
-        let mut prog_loc = 0;
-        let mut labels = HashMap::new();
-
         let token_strings = split_to_token_strings(input);
 
         let token_strings = strip_comments(token_strings);
 
-        let input = token_strings.map(|t| {
-                let ret = t.parse::<UxnToken>().unwrap();
+        let tokens = token_strings.map(|t| t.parse::<UxnToken>());
 
-                match ret {
-                    UxnToken::PadAbs(n) => {
-                        if n < prog_loc {
-                            println!(
-                                "Error in program: absolute padding to area of program already written to"
-                            );
-                            std::process::exit(1);
-                        }
+        let validated_tokens = validate_tokens(tokens);
 
-                        prog_loc += ret.num_bytes(prog_loc);
-                    }
-                    UxnToken::PadRel(_) => {
-                        prog_loc += ret.num_bytes(prog_loc);
-                    }
-                    UxnToken::LabelDefine(ref label_name) => {
-                        labels.insert(label_name.clone(), prog_loc);
-                    }
-                    _ => {
-                        if prog_loc < 0x100 {
-                            println!("Error in program: writing to zero page");
-                            std::process::exit(1);
-                        }
+        //let mut prog_loc = 0;
+        let mut labels = HashMap::new();
+        //let input = token_strings.map(|t| {
+        //        let ret = t.parse::<UxnToken>().unwrap();
 
-                        prog_loc += ret.num_bytes(prog_loc);
-                    }
-                };
+        //        match ret {
+        //            UxnToken::PadAbs(n) => {
+        //                if n < prog_loc {
+        //                    println!(
+        //                        "Error in program: absolute padding to area of program already written to"
+        //                    );
+        //                    std::process::exit(1);
+        //                }
 
-                return ret;
-            });
+        //                prog_loc += ret.num_bytes(prog_loc);
+        //            }
+        //            UxnToken::PadRel(_) => {
+        //                prog_loc += ret.num_bytes(prog_loc);
+        //            }
+        //            UxnToken::LabelDefine(ref label_name) => {
+        //                labels.insert(label_name.clone(), prog_loc);
+        //            }
+        //            _ => {
+        //                if prog_loc < 0x100 {
+        //                    println!("Error in program: writing to zero page");
+        //                    std::process::exit(1);
+        //                }
 
-        let program = input.collect::<Vec<_>>();
+        //                prog_loc += ret.num_bytes(prog_loc);
+        //            }
+        //        };
+
+        //        return ret;
+        //    });
+
+        let program = validated_tokens.collect::<Result<Vec<_>, AsmError>>()?;
 
         return Ok(Asm { labels, program });
     }
@@ -125,6 +137,47 @@ where
     });
 
     StringIter { inner_iter: x }
+}
+
+fn validate_tokens<I>(input: I) -> impl Iterator<Item = Result<UxnToken, AsmError>>
+where
+    I: Iterator<Item = Result<UxnToken, Infallible>>
+{
+    let mut prog_loc = 0;
+
+    input.map(move |t| {
+        match t {
+            Ok(t) => {
+                match t {
+                    UxnToken::PadAbs(n) => {
+                        if n < prog_loc {
+                            return Err(AsmError::AbsPaddingRegression);
+                        }
+
+                        prog_loc += t.num_bytes(prog_loc);
+                    }
+                    UxnToken::PadRel(_) => {
+                        prog_loc += t.num_bytes(prog_loc);
+                    }
+                    UxnToken::LabelDefine(ref label_name) => {
+                        // labels.insert(label_name.clone(), prog_loc);
+                    }
+                    _ => {
+                        if prog_loc < 0x100 {
+                            return Err(AsmError::ZeroPageWrite);
+                        }
+
+                        prog_loc += t.num_bytes(prog_loc);
+                    }
+                };
+
+                return Ok(t);
+            },
+            Err(e) => {
+                return Err(AsmError::TokenParseError);
+            },
+        }
+    })
 }
 
 fn strip_comments<I>(input: I) -> impl Iterator<Item = String>
