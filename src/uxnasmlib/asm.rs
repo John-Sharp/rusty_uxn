@@ -140,3 +140,26 @@ where
 
     TokenStrings { inner_iter: x }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_split_to_token_strings() {
+        let input = vec![
+            "tokenA tokenB tokenC{tokenD".to_owned(),
+            "}tokenE               (tokenF            tokenG".to_owned(),
+        ];
+
+        assert_eq!(
+            split_to_token_strings(input.into_iter()).collect::<Vec<_>>(),
+            vec!(
+                "tokenA", "tokenB", "tokenC", "{", "tokenD", "}", "tokenE", "(", "tokenF", "tokenG"
+            )
+            .into_iter()
+            .map(|t| t.to_owned())
+            .collect::<Vec<_>>()
+        );
+    }
+}
