@@ -131,8 +131,8 @@ impl UxnToken {
             UxnToken::PadRel(n) => return *n,
             UxnToken::RawByte(_) => return 0x1,
             UxnToken::RawShort(_) => return 0x2,
-            UxnToken::LitByte(_) => return 0x1,
-            UxnToken::LitShort(_) => return 0x2,
+            UxnToken::LitByte(_) => return 0x2,
+            UxnToken::LitShort(_) => return 0x3,
             UxnToken::LabelDefine(_) => return 0x0,
             UxnToken::RawAbsAddr(_) => return 0x2,
         }
@@ -238,5 +238,113 @@ impl FromStr for UxnToken {
         }
 
         return Ok(UxnToken::MacroInvocation(s.to_owned()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // test `get_bytes` function; for each possible input token,
+    // verify that the correct sequence of bytes is produced for it
+    #[test]
+    fn test_get_bytes_happy() {
+        let prog_counter = 0x0;
+        let mut labels = HashMap::new();
+        labels.insert("test_label".to_owned(), 0x1234);
+
+        let inputs = [
+            (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
+            vec![0x17,]),
+
+            // TODO
+            (UxnToken::MacroInvocation("test_macro".to_owned()),
+            vec![0xaa, 0xbb]),
+
+            (UxnToken::PadAbs(0x100),
+             vec![0x00; 0x100]),
+
+            (UxnToken::PadRel(0x80),
+             vec![0x00; 0x80]),
+
+            (UxnToken::RawByte(0xab),
+             vec![0xab]),
+
+            // TODO
+            (UxnToken::RawShort(0xabab),
+             vec![0xdd]),
+
+            (UxnToken::LitByte(0xab),
+             vec![0x80, 0xab]),
+
+            (UxnToken::LitShort(0xabcd),
+             vec![0xA0, 0xab, 0xcd]),
+
+            (UxnToken::LabelDefine("test_label".to_owned()),
+             vec![]),
+
+            (UxnToken::RawAbsAddr("test_label".to_owned()),
+             vec![0x12, 0x34]),
+        ];
+
+        for (token, expected) in inputs.into_iter() {
+            let returned = token.get_bytes(prog_counter, &labels);
+            assert_eq!(returned, expected);
+        }
+    }
+
+    // TODO should have better error
+    // test `get_bytes` function with a label that hasn't been defined
+    #[test]
+    #[should_panic]
+    fn test_get_bytes_unrecognised_label() {
+        let mut labels = HashMap::new();
+        labels.insert("test_label".to_owned(), 0x1234);
+
+        let input = UxnToken::RawAbsAddr("test_label_xyz".to_owned());
+        input.get_bytes(0, &labels);
+    }
+
+    #[test]
+    fn test_num_bytes_happy() {
+        let prog_counter = 0;
+
+        let inputs = [
+            (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
+             0x1),
+
+            // TODO
+            (UxnToken::MacroInvocation("blah".to_owned()),
+             0xff),
+
+            (UxnToken::PadAbs(0x1ff),
+             0x1ff),
+
+            (UxnToken::PadRel(0x1fe),
+             0x1fe),
+
+            (UxnToken::RawByte(0xfe),
+             0x1),
+
+            (UxnToken::RawShort(0xabcd),
+             0x2),
+
+            (UxnToken::LitByte(0xab),
+             0x2),
+
+            (UxnToken::LitShort(0xabcd),
+             0x3),
+
+            (UxnToken::LabelDefine("test_label".to_owned()),
+             0x0),
+
+            (UxnToken::RawAbsAddr("test_label".to_owned()),
+             0x2),
+        ];
+
+        for (token, expected) in inputs.into_iter() {
+            let returned = token.num_bytes(prog_counter);
+            assert_eq!(returned, expected);
+        }
     }
 }
