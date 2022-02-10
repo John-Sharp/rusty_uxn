@@ -3,8 +3,8 @@ use std::io::Write;
 use std::str::FromStr;
 
 mod tokens;
-use tokens::UxnToken;
 use std::convert::Infallible;
+use tokens::UxnToken;
 
 pub struct Asm {
     program: Vec<UxnToken>,
@@ -106,43 +106,44 @@ where
     StringIter { inner_iter: x }
 }
 
-fn validate_tokens<'a, I:'a>(input: I, labels: &'a mut HashMap<String, u16>) -> impl Iterator<Item = Result<UxnToken, AsmError>> + 'a
+fn validate_tokens<'a, I: 'a>(
+    input: I,
+    labels: &'a mut HashMap<String, u16>,
+) -> impl Iterator<Item = Result<UxnToken, AsmError>> + 'a
 where
-    I: Iterator<Item = Result<UxnToken, Infallible>>
+    I: Iterator<Item = Result<UxnToken, Infallible>>,
 {
     let mut prog_loc = 0u16;
 
-    input.map(move |t| {
-        match t {
-            Ok(t) => {
-                match t {
-                    UxnToken::PadAbs(n) => {
-                        if n < prog_loc {
-                            return Err(AsmError::AbsPaddingRegression);
-                        }
+    input.map(move |t| match t {
+        Ok(t) => {
+            match t {
+                UxnToken::PadAbs(n) => {
+                    if n < prog_loc {
+                        return Err(AsmError::AbsPaddingRegression);
+                    }
 
-                        prog_loc += t.num_bytes(prog_loc);
+                    prog_loc += t.num_bytes(prog_loc);
+                }
+                UxnToken::PadRel(_) => {
+                    prog_loc += t.num_bytes(prog_loc);
+                }
+                UxnToken::LabelDefine(ref label_name) => {
+                    labels.insert(label_name.clone(), prog_loc);
+                }
+                _ => {
+                    if prog_loc < 0x100 {
+                        return Err(AsmError::ZeroPageWrite);
                     }
-                    UxnToken::PadRel(_) => {
-                        prog_loc += t.num_bytes(prog_loc);
-                    }
-                    UxnToken::LabelDefine(ref label_name) => {
-                        labels.insert(label_name.clone(), prog_loc);
-                    }
-                    _ => {
-                        if prog_loc < 0x100 {
-                            return Err(AsmError::ZeroPageWrite);
-                        }
 
-                        prog_loc += t.num_bytes(prog_loc);
-                    }
-                };
+                    prog_loc += t.num_bytes(prog_loc);
+                }
+            };
 
-                return Ok(t);
-            },
-            Err(e) => {
-                return Err(AsmError::TokenParseError);
-            },
+            return Ok(t);
+        }
+        Err(e) => {
+            return Err(AsmError::TokenParseError);
         }
     })
 }
@@ -196,7 +197,7 @@ mod tests {
     }
 
     // test `strip_comments` function; create token string input
-    // and assert that token strings laying between '(' ')' tokens 
+    // and assert that token strings laying between '(' ')' tokens
     // are removed from the input
     #[test]
     fn test_strip_comments() {
@@ -228,10 +229,9 @@ mod tests {
             Ok(UxnToken::RawShort(0xbbcc)),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels)
-            .collect::<Vec<_>>();
+        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
 
-        let expected_output : Vec<Result<UxnToken, AsmError>>;
+        let expected_output: Vec<Result<UxnToken, AsmError>>;
         expected_output = vec![
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::RawByte(0xff)),
@@ -261,10 +261,9 @@ mod tests {
             Ok(UxnToken::RawShort(0xbbcc)),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels)
-            .collect::<Vec<_>>();
+        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
 
-        let expected_output : Vec<Result<UxnToken, AsmError>>;
+        let expected_output: Vec<Result<UxnToken, AsmError>>;
         expected_output = vec![
             Ok(UxnToken::PadRel(0x80)),
             Ok(UxnToken::PadAbs(0xc0)),
@@ -297,10 +296,9 @@ mod tests {
             Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels)
-            .collect::<Vec<_>>();
+        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
 
-        let expected_output : Vec<Result<UxnToken, AsmError>>;
+        let expected_output: Vec<Result<UxnToken, AsmError>>;
         expected_output = vec![
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
@@ -322,7 +320,7 @@ mod tests {
 
     // test `validate_tokens` function padding regression error;
     // test having two absolute paddings, one padding to before
-    // current program location. Assert the correct error is 
+    // current program location. Assert the correct error is
     // received
     #[test]
     fn test_validate_tokens_padding_regression() {
@@ -334,8 +332,8 @@ mod tests {
             Ok(UxnToken::PadAbs(0x101)),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels)
-            .collect::<Result<Vec<_>, AsmError>>();
+        let output =
+            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
 
         assert_eq!(output, Err(AsmError::AbsPaddingRegression));
     }
@@ -346,13 +344,10 @@ mod tests {
     #[test]
     fn test_validate_tokens_zero_page_write() {
         let mut labels = HashMap::new();
-        let input = vec![
-            Ok(UxnToken::PadAbs(0xff)),
-            Ok(UxnToken::RawByte(0xaa)),
-        ];
+        let input = vec![Ok(UxnToken::PadAbs(0xff)), Ok(UxnToken::RawByte(0xaa))];
 
-        let output = validate_tokens(input.into_iter(), &mut labels)
-            .collect::<Result<Vec<_>, AsmError>>();
+        let output =
+            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
 
         assert_eq!(output, Err(AsmError::ZeroPageWrite));
     }
@@ -362,7 +357,5 @@ mod tests {
     // test that a parse error in the input stream is correctly
     // propagated as a AsmError::TokenParseError
     #[test]
-    fn test_validate_tokens_token_parse_error() {
-
-    }
+    fn test_validate_tokens_token_parse_error() {}
 }
