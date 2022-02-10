@@ -11,7 +11,7 @@ pub struct Asm {
     labels: HashMap<String, u16>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AsmError {
     General,
     AbsPaddingRegression,
@@ -30,42 +30,9 @@ impl Asm {
 
         let tokens = token_strings.map(|t| t.parse::<UxnToken>());
 
-        let validated_tokens = validate_tokens(tokens);
-
-        //let mut prog_loc = 0;
         let mut labels = HashMap::new();
-        //let input = token_strings.map(|t| {
-        //        let ret = t.parse::<UxnToken>().unwrap();
 
-        //        match ret {
-        //            UxnToken::PadAbs(n) => {
-        //                if n < prog_loc {
-        //                    println!(
-        //                        "Error in program: absolute padding to area of program already written to"
-        //                    );
-        //                    std::process::exit(1);
-        //                }
-
-        //                prog_loc += ret.num_bytes(prog_loc);
-        //            }
-        //            UxnToken::PadRel(_) => {
-        //                prog_loc += ret.num_bytes(prog_loc);
-        //            }
-        //            UxnToken::LabelDefine(ref label_name) => {
-        //                labels.insert(label_name.clone(), prog_loc);
-        //            }
-        //            _ => {
-        //                if prog_loc < 0x100 {
-        //                    println!("Error in program: writing to zero page");
-        //                    std::process::exit(1);
-        //                }
-
-        //                prog_loc += ret.num_bytes(prog_loc);
-        //            }
-        //        };
-
-        //        return ret;
-        //    });
+        let validated_tokens = validate_tokens(tokens, &mut labels);
 
         let program = validated_tokens.collect::<Result<Vec<_>, AsmError>>()?;
 
@@ -139,11 +106,11 @@ where
     StringIter { inner_iter: x }
 }
 
-fn validate_tokens<I>(input: I) -> impl Iterator<Item = Result<UxnToken, AsmError>>
+fn validate_tokens<'a, I:'a>(input: I, labels: &'a mut HashMap<String, u16>) -> impl Iterator<Item = Result<UxnToken, AsmError>> + 'a
 where
     I: Iterator<Item = Result<UxnToken, Infallible>>
 {
-    let mut prog_loc = 0;
+    let mut prog_loc = 0u16;
 
     input.map(move |t| {
         match t {
@@ -160,7 +127,7 @@ where
                         prog_loc += t.num_bytes(prog_loc);
                     }
                     UxnToken::LabelDefine(ref label_name) => {
-                        // labels.insert(label_name.clone(), prog_loc);
+                        labels.insert(label_name.clone(), prog_loc);
                     }
                     _ => {
                         if prog_loc < 0x100 {
@@ -207,6 +174,9 @@ where
 mod tests {
     use super::*;
 
+    // test `split_to_token_strings` function; create input with
+    // bracket separators and assert that it is split as expected
+    // into token strings
     #[test]
     fn test_split_to_token_strings() {
         let input = vec![
@@ -225,6 +195,9 @@ mod tests {
         );
     }
 
+    // test `strip_comments` function; create token string input
+    // and assert that token strings laying between '(' ')' tokens 
+    // are removed from the input
     #[test]
     fn test_strip_comments() {
         let input = vec![
@@ -240,5 +213,156 @@ mod tests {
                 .map(|t| t.to_owned())
                 .collect::<Vec<_>>()
         );
+    }
+
+    // test `validate_tokens` function; test simplest happy path,
+    // create token input and assert that function successfully
+    // runs
+    #[test]
+    fn test_validate_tokens_happy() {
+        let mut labels = HashMap::new();
+        let input = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::RawByte(0xff)),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawShort(0xbbcc)),
+        ];
+
+        let output = validate_tokens(input.into_iter(), &mut labels)
+            .collect::<Vec<_>>();
+
+        let expected_output : Vec<Result<UxnToken, AsmError>>;
+        expected_output = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::RawByte(0xff)),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawShort(0xbbcc)),
+        ];
+
+        assert_eq!(output, expected_output);
+
+        let expected_labels = HashMap::new();
+        assert_eq!(labels, expected_labels);
+    }
+
+    // test `validate_tokens` function, with multiple paddings;
+    // test multiple paddings
+    // (both relative and absolue) and
+    // assert that function successfully runs
+    #[test]
+    fn test_validate_tokens_happy_multi_padding() {
+        let mut labels = HashMap::new();
+        let input = vec![
+            Ok(UxnToken::PadRel(0x80)),
+            Ok(UxnToken::PadAbs(0xc0)),
+            Ok(UxnToken::PadRel(0x40)),
+            Ok(UxnToken::RawByte(0xff)),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawShort(0xbbcc)),
+        ];
+
+        let output = validate_tokens(input.into_iter(), &mut labels)
+            .collect::<Vec<_>>();
+
+        let expected_output : Vec<Result<UxnToken, AsmError>>;
+        expected_output = vec![
+            Ok(UxnToken::PadRel(0x80)),
+            Ok(UxnToken::PadAbs(0xc0)),
+            Ok(UxnToken::PadRel(0x40)),
+            Ok(UxnToken::RawByte(0xff)),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawShort(0xbbcc)),
+        ];
+
+        assert_eq!(output, expected_output);
+
+        let expected_labels = HashMap::new();
+        assert_eq!(labels, expected_labels);
+    }
+
+    // test `validate_tokens` function with labels; test having
+    // labels in the token stream and check they're location
+    // is stored as expected in a hash map
+    #[test]
+    fn test_validate_tokens_happy_label() {
+        let mut labels = HashMap::new();
+        let input = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::LabelDefine("test_label".to_owned())),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::LabelDefine("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+        ];
+
+        let output = validate_tokens(input.into_iter(), &mut labels)
+            .collect::<Vec<_>>();
+
+        let expected_output : Vec<Result<UxnToken, AsmError>>;
+        expected_output = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::LabelDefine("test_label".to_owned())),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::LabelDefine("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+        ];
+
+        assert_eq!(output, expected_output);
+
+        let mut expected_labels = HashMap::new();
+        expected_labels.insert("test_label".to_owned(), 0x100);
+        expected_labels.insert("test_label2".to_owned(), 0x105);
+        assert_eq!(labels, expected_labels);
+    }
+
+    // test `validate_tokens` function padding regression error;
+    // test having two absolute paddings, one padding to before
+    // current program location. Assert the correct error is 
+    // received
+    #[test]
+    fn test_validate_tokens_padding_regression() {
+        let mut labels = HashMap::new();
+        let input = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::PadAbs(0x101)),
+        ];
+
+        let output = validate_tokens(input.into_iter(), &mut labels)
+            .collect::<Result<Vec<_>, AsmError>>();
+
+        assert_eq!(output, Err(AsmError::AbsPaddingRegression));
+    }
+
+    // test `validate_tokens` function zero page write error;
+    // test that attempting to write to the zero page results
+    // in the correct error
+    #[test]
+    fn test_validate_tokens_zero_page_write() {
+        let mut labels = HashMap::new();
+        let input = vec![
+            Ok(UxnToken::PadAbs(0xff)),
+            Ok(UxnToken::RawByte(0xaa)),
+        ];
+
+        let output = validate_tokens(input.into_iter(), &mut labels)
+            .collect::<Result<Vec<_>, AsmError>>();
+
+        assert_eq!(output, Err(AsmError::ZeroPageWrite));
+    }
+
+    // TODO
+    // test `validate_tokens` function token parse error;
+    // test that a parse error in the input stream is correctly
+    // propagated as a AsmError::TokenParseError
+    #[test]
+    fn test_validate_tokens_token_parse_error() {
+
     }
 }

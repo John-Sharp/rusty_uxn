@@ -5,13 +5,13 @@ use std::str::FromStr;
 pub mod ops {
     use std::str::FromStr;
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub enum OpCode {
         Brk,
         Deo,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub struct OpObject {
         keep: bool,
         ret: bool,
@@ -78,7 +78,7 @@ pub mod ops {
 
 use ops::OpObject;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum UxnToken {
     Op(OpObject),
     MacroInvocation(String),
