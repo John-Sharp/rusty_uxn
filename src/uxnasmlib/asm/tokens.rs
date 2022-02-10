@@ -347,4 +347,45 @@ mod tests {
             assert_eq!(returned, expected);
         }
     }
+
+    // test get_bytes function when the program counter is not 0
+    #[test]
+    fn test_get_bytes_prog_counter() {
+        let labels = HashMap::new();
+        let prog_counter = 0x70;
+        let token = UxnToken::PadAbs(0x100);
+        let returned = token.get_bytes(prog_counter, &labels);
+        assert_eq!(returned, vec![0x0; 0x90]);
+    }
+
+    // test get_bytes function when the program counter is not 0
+    // but the absolute padding is behind the program counter
+    #[test]
+    #[should_panic]
+    fn test_get_bytes_prog_counter_fail() {
+        let labels = HashMap::new();
+        let prog_counter = 0x170;
+        let token = UxnToken::PadAbs(0x100);
+        token.get_bytes(prog_counter, &labels);
+    }
+
+    // test num_bytes function when the program counter is not 0
+    #[test]
+    fn test_num_bytes_prog_counter() {
+        let prog_counter = 0x70;
+        let token = UxnToken::PadAbs(0x100);
+        let returned = token.num_bytes(prog_counter);
+        assert_eq!(returned, 0x90);
+    }
+
+    // TODO need to return error
+    // test num_bytes function when the program counter is not 0
+    // but the absolute padding is behind the program counter
+    #[test]
+    #[should_panic]
+    fn test_num_bytes_prog_counter_fail() {
+        let prog_counter = 0x170;
+        let token = UxnToken::PadAbs(0x100);
+        token.num_bytes(prog_counter);
+    }
 }
