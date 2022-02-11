@@ -3,7 +3,6 @@ use std::io::Write;
 use std::str::FromStr;
 
 mod tokens;
-use std::convert::Infallible;
 use tokens::UxnToken;
 
 pub struct Asm {
@@ -16,7 +15,7 @@ pub enum AsmError {
     General,
     AbsPaddingRegression,
     ZeroPageWrite,
-    TokenParseError, // TODO improve
+    TokenParseError { parse_error: tokens::ParseError },
 }
 
 impl Asm {
@@ -111,7 +110,7 @@ fn validate_tokens<'a, I: 'a>(
     labels: &'a mut HashMap<String, u16>,
 ) -> impl Iterator<Item = Result<UxnToken, AsmError>> + 'a
 where
-    I: Iterator<Item = Result<UxnToken, Infallible>>,
+    I: Iterator<Item = Result<UxnToken, tokens::ParseError>>,
 {
     let mut prog_loc = 0u16;
 
@@ -143,7 +142,7 @@ where
             return Ok(t);
         }
         Err(e) => {
-            return Err(AsmError::TokenParseError);
+            return Err(AsmError::TokenParseError { parse_error: e });
         }
     })
 }
@@ -352,10 +351,29 @@ mod tests {
         assert_eq!(output, Err(AsmError::ZeroPageWrite));
     }
 
-    // TODO
     // test `validate_tokens` function token parse error;
     // test that a parse error in the input stream is correctly
     // propagated as a AsmError::TokenParseError
     #[test]
-    fn test_validate_tokens_token_parse_error() {}
+    fn test_validate_tokens_token_parse_error() {
+        let mut labels = HashMap::new();
+        let input = vec![
+            Ok(UxnToken::PadAbs(0xff)),
+            Err(tokens::ParseError::RuneAbsentArg {
+                rune: "|".to_owned(),
+            }),
+        ];
+
+        let output =
+            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
+
+        assert_eq!(
+            output,
+            Err(AsmError::TokenParseError {
+                parse_error: tokens::ParseError::RuneAbsentArg {
+                    rune: "|".to_owned()
+                },
+            })
+        );
+    }
 }

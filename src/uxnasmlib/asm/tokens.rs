@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::str::FromStr;
 
 pub mod ops {
@@ -44,6 +43,10 @@ pub mod ops {
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             if s.len() < 3 {
+                return Err(ParseOpObjectError {});
+            }
+
+            if s.len() > 3 {
                 return Err(ParseOpObjectError {});
             }
 
@@ -139,8 +142,14 @@ impl UxnToken {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum ParseError {
+    RuneAbsentArg { rune: String },
+    RuneInvalidArg { rune: String, supplied_arg: String },
+}
+
 impl FromStr for UxnToken {
-    type Err = Infallible;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(op) = s.parse::<OpObject>() {
@@ -161,68 +170,107 @@ impl FromStr for UxnToken {
 
         if &s[0..1] == "|" {
             if s.len() < 2 {
-                // TODO replace these with parse errors
-                panic!();
+                return Err(ParseError::RuneAbsentArg {
+                    rune: "|".to_owned(),
+                });
             }
 
             if let Ok(pad_val) = u16::from_str_radix(&s[1..], 16) {
                 return Ok(UxnToken::PadAbs(pad_val));
             }
+
+            return Err(ParseError::RuneInvalidArg {
+                rune: "|".to_owned(),
+                supplied_arg: s[1..].to_owned(),
+            });
         }
 
         if &s[0..1] == "$" {
             if s.len() < 2 {
-                // TODO replace these with parse errors
-                panic!();
+                return Err(ParseError::RuneAbsentArg {
+                    rune: "$".to_owned(),
+                });
             }
 
             if let Ok(pad_val) = u16::from_str_radix(&s[1..], 16) {
                 return Ok(UxnToken::PadRel(pad_val));
             }
+
+            return Err(ParseError::RuneInvalidArg {
+                rune: "$".to_owned(),
+                supplied_arg: s[1..].to_owned(),
+            });
         }
 
         if &s[0..1] == "#" {
             let s = &s[1..];
             match s.len() {
+                0 => {
+                    return Err(ParseError::RuneAbsentArg {
+                        rune: "#".to_owned(),
+                    });
+                },
                 2 => {
                     if let Ok(val) = u8::from_str_radix(s, 16) {
                         return Ok(UxnToken::LitByte(val));
                     } else {
-                        panic!();
+                        return Err(ParseError::RuneInvalidArg {
+                            rune: "#".to_owned(),
+                            supplied_arg: s.to_owned(),
+                        });
                     }
                 }
                 4 => {
                     if let Ok(val) = u16::from_str_radix(s, 16) {
                         return Ok(UxnToken::LitShort(val));
                     } else {
-                        panic!();
+                        return Err(ParseError::RuneInvalidArg {
+                            rune: "#".to_owned(),
+                            supplied_arg: s.to_owned(),
+                        });
                     }
                 }
                 _ => {
-                    panic!();
+                    return Err(ParseError::RuneInvalidArg {
+                        rune: "#".to_owned(),
+                        supplied_arg: s.to_owned(),
+                    });
                 }
             };
         }
 
         if &s[0..1] == "'" {
+            if s.len() == 1 {
+                return Err(ParseError::RuneAbsentArg {
+                    rune: "'".to_owned(),
+                });
+            }
+
             if s.len() > 2 {
-                panic!();
+                return Err(ParseError::RuneInvalidArg {
+                    rune: "'".to_owned(),
+                    supplied_arg: s[1..].to_owned(),
+                });
             }
 
-            let s = (&s[1..]).as_bytes();
+            let sb = (&s[1..]).as_bytes();
 
-            if s[0] > 0x7f {
+            if sb[0] > 0x7f {
                 // not ascii
-                panic!();
+                return Err(ParseError::RuneInvalidArg {
+                    rune: "'".to_owned(),
+                    supplied_arg: s[1..].to_owned(),
+                });
             }
 
-            return Ok(UxnToken::RawByte(s[0]));
+            return Ok(UxnToken::RawByte(sb[0]));
         }
 
         if &s[0..1] == "@" {
             if s.len() == 1 {
-                // label with no name
-                panic!();
+                return Err(ParseError::RuneAbsentArg {
+                    rune: "@".to_owned(),
+                });
             }
 
             return Ok(UxnToken::LabelDefine((&s[1..]).to_owned()));
@@ -230,8 +278,9 @@ impl FromStr for UxnToken {
 
         if &s[0..1] == ":" {
             if s.len() == 1 {
-                // label with no name
-                panic!();
+                return Err(ParseError::RuneAbsentArg {
+                    rune: ":".to_owned(),
+                });
             }
 
             return Ok(UxnToken::RawAbsAddr((&s[1..]).to_owned()));
@@ -254,37 +303,27 @@ mod tests {
         labels.insert("test_label".to_owned(), 0x1234);
 
         let inputs = [
-            (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
-            vec![0x17,]),
-
+            (
+                UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
+                vec![0x17],
+            ),
             // TODO
-            (UxnToken::MacroInvocation("test_macro".to_owned()),
-            vec![0xaa, 0xbb]),
-
-            (UxnToken::PadAbs(0x100),
-             vec![0x00; 0x100]),
-
-            (UxnToken::PadRel(0x80),
-             vec![0x00; 0x80]),
-
-            (UxnToken::RawByte(0xab),
-             vec![0xab]),
-
+            (
+                UxnToken::MacroInvocation("test_macro".to_owned()),
+                vec![0xaa, 0xbb],
+            ),
+            (UxnToken::PadAbs(0x100), vec![0x00; 0x100]),
+            (UxnToken::PadRel(0x80), vec![0x00; 0x80]),
+            (UxnToken::RawByte(0xab), vec![0xab]),
             // TODO
-            (UxnToken::RawShort(0xabab),
-             vec![0xdd]),
-
-            (UxnToken::LitByte(0xab),
-             vec![0x80, 0xab]),
-
-            (UxnToken::LitShort(0xabcd),
-             vec![0xA0, 0xab, 0xcd]),
-
-            (UxnToken::LabelDefine("test_label".to_owned()),
-             vec![]),
-
-            (UxnToken::RawAbsAddr("test_label".to_owned()),
-             vec![0x12, 0x34]),
+            (UxnToken::RawShort(0xabab), vec![0xdd]),
+            (UxnToken::LitByte(0xab), vec![0x80, 0xab]),
+            (UxnToken::LitShort(0xabcd), vec![0xA0, 0xab, 0xcd]),
+            (UxnToken::LabelDefine("test_label".to_owned()), vec![]),
+            (
+                UxnToken::RawAbsAddr("test_label".to_owned()),
+                vec![0x12, 0x34],
+            ),
         ];
 
         for (token, expected) in inputs.into_iter() {
@@ -310,36 +349,17 @@ mod tests {
         let prog_counter = 0;
 
         let inputs = [
-            (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
-             0x1),
-
+            (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()), 0x1),
             // TODO
-            (UxnToken::MacroInvocation("blah".to_owned()),
-             0xff),
-
-            (UxnToken::PadAbs(0x1ff),
-             0x1ff),
-
-            (UxnToken::PadRel(0x1fe),
-             0x1fe),
-
-            (UxnToken::RawByte(0xfe),
-             0x1),
-
-            (UxnToken::RawShort(0xabcd),
-             0x2),
-
-            (UxnToken::LitByte(0xab),
-             0x2),
-
-            (UxnToken::LitShort(0xabcd),
-             0x3),
-
-            (UxnToken::LabelDefine("test_label".to_owned()),
-             0x0),
-
-            (UxnToken::RawAbsAddr("test_label".to_owned()),
-             0x2),
+            (UxnToken::MacroInvocation("blah".to_owned()), 0xff),
+            (UxnToken::PadAbs(0x1ff), 0x1ff),
+            (UxnToken::PadRel(0x1fe), 0x1fe),
+            (UxnToken::RawByte(0xfe), 0x1),
+            (UxnToken::RawShort(0xabcd), 0x2),
+            (UxnToken::LitByte(0xab), 0x2),
+            (UxnToken::LitShort(0xabcd), 0x3),
+            (UxnToken::LabelDefine("test_label".to_owned()), 0x0),
+            (UxnToken::RawAbsAddr("test_label".to_owned()), 0x2),
         ];
 
         for (token, expected) in inputs.into_iter() {
@@ -387,5 +407,55 @@ mod tests {
         let prog_counter = 0x170;
         let token = UxnToken::PadAbs(0x100);
         token.num_bytes(prog_counter);
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a raw byte
+    #[test]
+    fn test_from_str_raw_byte() {
+        let input = "ab";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::RawByte(0xab);
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a raw short
+    #[test]
+    fn test_from_str_raw_short() {
+        let input = "abcd";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::RawShort(0xabcd);
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should trigger an error because a rune has no
+    // argument attached
+    #[test]
+    fn test_from_str_rune_absent() {
+        let inputs = ["|", "$", "#", "'", "@", ":"];
+
+        for input in inputs {
+            let output = input.parse::<UxnToken>();
+            let expected = Err(ParseError::RuneAbsentArg{
+                rune: input.to_owned()});
+
+            assert_eq!(output, expected);
+        }
+    }
+
+    // test from_str for UxnToken with an input that should trigger an error because a rune has
+    // invalid argument attached
+    #[test]
+    fn test_from_str_rune_invalid_arg() {
+        let inputs = ["|zz", "$uu", "#abcdd",
+        "#ax", "#abxd", "'aa", "'€", ];
+
+        for input in inputs {
+            let output = input.parse::<UxnToken>();
+            let expected = Err(ParseError::RuneInvalidArg{
+                rune: input[0..1].to_owned(),
+                supplied_arg: input[1..].to_owned()});
+
+            assert_eq!(output, expected);
+        }
     }
 }
