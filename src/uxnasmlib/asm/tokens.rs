@@ -262,15 +262,22 @@ use ops::OpObject;
 #[derive(Debug, PartialEq)]
 pub enum UxnToken {
     Op(OpObject),
-    MacroInvocation(String),
+    // MacroDefine,
     PadAbs(u16),
     PadRel(u16),
-    RawByte(u8),
-    RawShort(u16),
+    LabelDefine(String),
+    SubLabelDefine(String),
+    // Include,
     LitByte(u8),
     LitShort(u16),
-    LabelDefine(String),
+    // LitAddressZeroPage(String),
+    // LitAddressRel(String),
+    // LitAddressAbs(String),
     RawAbsAddr(String),
+    MacroInvocation(String),
+    RawByte(u8),
+    RawShort(u16),
+    // RawWord(Vec<u8>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -300,7 +307,9 @@ impl UxnToken {
                 return Ok(vec![0xA0, bytes[0], bytes[1]]);
             }
             UxnToken::LabelDefine(_) => return Ok(vec![]),
+            UxnToken::SubLabelDefine(_) => return Ok(vec![]),
             UxnToken::RawAbsAddr(label) => {
+                // TODO allow use of sub labels here
                 if let Some(addr) = labels.get(label) {
                     let bytes = addr.to_be_bytes();
                     return Ok(vec![bytes[0], bytes[1]]);
@@ -324,6 +333,7 @@ impl UxnToken {
             UxnToken::LitByte(_) => return 0x2,
             UxnToken::LitShort(_) => return 0x3,
             UxnToken::LabelDefine(_) => return 0x0,
+            UxnToken::SubLabelDefine(_) => return 0x0,
             UxnToken::RawAbsAddr(_) => return 0x2,
         }
     }
@@ -476,6 +486,16 @@ impl FromStr for UxnToken {
             return Ok(UxnToken::LabelDefine((&s[1..]).to_owned()));
         }
 
+        if &s[0..1] == "&" {
+            if s.len() == 1 {
+                return Err(ParseError::RuneAbsentArg {
+                    rune: "&".to_owned(),
+                });
+            }
+
+            return Ok(UxnToken::SubLabelDefine((&s[1..]).to_owned()));
+        }
+
         if &s[0..1] == ":" {
             if s.len() == 1 {
                 return Err(ParseError::RuneAbsentArg {
@@ -519,6 +539,7 @@ mod tests {
             (UxnToken::LitByte(0xab), vec![0x80, 0xab]),
             (UxnToken::LitShort(0xabcd), vec![0xA0, 0xab, 0xcd]),
             (UxnToken::LabelDefine("test_label".to_owned()), vec![]),
+            (UxnToken::SubLabelDefine("test_sub_label".to_owned()), vec![]),
             (
                 UxnToken::RawAbsAddr("test_label".to_owned()),
                 vec![0x12, 0x34],
@@ -561,6 +582,7 @@ mod tests {
             (UxnToken::LitByte(0xab), 0x2),
             (UxnToken::LitShort(0xabcd), 0x3),
             (UxnToken::LabelDefine("test_label".to_owned()), 0x0),
+            (UxnToken::SubLabelDefine("test_sub_label".to_owned()), 0x0),
             (UxnToken::RawAbsAddr("test_label".to_owned()), 0x2),
         ];
 
@@ -665,6 +687,15 @@ mod tests {
         let input = "@test_label";
         let output = input.parse::<UxnToken>();
         let expected = UxnToken::LabelDefine("test_label".to_owned());
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a sub-label define
+    #[test]
+    fn test_from_str_sub_label_define() {
+        let input = "&test_sub_label";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::SubLabelDefine("test_sub_label".to_owned());
         assert_eq!(output, Ok(expected));
     }
 
