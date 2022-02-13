@@ -418,12 +418,62 @@ mod tests {
         assert_eq!(output, Ok(expected));
     }
 
-    // test from_str for UxnToken with an input that should be parsed as a raw short
+    // test from_str for UxnToken with an input that should be parsed as absolute padding 
     #[test]
-    fn test_from_str_raw_short() {
-        let input = "abcd";
+    fn test_from_str_pad_abs() {
+        let input = "|abcd";
         let output = input.parse::<UxnToken>();
-        let expected = UxnToken::RawShort(0xabcd);
+        let expected = UxnToken::PadAbs(0xabcd);
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as relative padding 
+    #[test]
+    fn test_from_str_pad_rel() {
+        let input = "$abcd";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::PadRel(0xabcd);
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as literal bytes/shorts 
+    #[test]
+    fn test_from_str_lit_byte_short() {
+        let input = "#cd";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::LitByte(0xcd);
+        assert_eq!(output, Ok(expected));
+
+        let input = "#abcd";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::LitShort(0xabcd);
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed from a character 
+    #[test]
+    fn test_from_str_char() {
+        let input = "'X";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::RawByte(0x58);
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a label define
+    #[test]
+    fn test_from_str_label_define() {
+        let input = "@test_label";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::LabelDefine("test_label".to_owned());
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a raw absolute address
+    #[test]
+    fn test_from_str_raw_abs_address() {
+        let input = ":test_label";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::RawAbsAddr("test_label".to_owned());
         assert_eq!(output, Ok(expected));
     }
 
