@@ -272,35 +272,41 @@ pub enum UxnToken {
     RawAbsAddr(String),
 }
 
+#[derive(Debug, PartialEq)]
+pub enum GetBytesError {
+    UndefinedLabel { label_name: String },
+}
+
 impl UxnToken {
-    pub fn get_bytes(&self, prog_counter: u16, labels: &HashMap<String, u16>) -> Vec<u8> {
+    pub fn get_bytes(&self, prog_counter: u16, labels: &HashMap<String, u16>) -> Result<Vec<u8>, GetBytesError> {
         match self {
-            UxnToken::Op(o) => return o.get_bytes(),
-            UxnToken::MacroInvocation(_) => return vec![0xaa, 0xbb],
+            UxnToken::Op(o) => return Ok(o.get_bytes()),
+            UxnToken::MacroInvocation(_) => return Ok(vec![0xaa, 0xbb]),
             UxnToken::PadAbs(n) => {
                 let bytes_to_write = *n - prog_counter;
 
-                return vec![0x00; bytes_to_write.into()];
+                return Ok(vec![0x00; bytes_to_write.into()]);
             }
-            UxnToken::PadRel(n) => return vec![0x00; (*n).into()],
-            UxnToken::RawByte(b) => return vec![*b],
+            UxnToken::PadRel(n) => return Ok(vec![0x00; (*n).into()]),
+            UxnToken::RawByte(b) => return Ok(vec![*b]),
             UxnToken::RawShort(s) => {
                 let bytes = s.to_be_bytes();
-                return vec![bytes[0], bytes[1]];
+                return Ok(vec![bytes[0], bytes[1]]);
             },
-            UxnToken::LitByte(b) => return vec![0x80, *b],
+            UxnToken::LitByte(b) => return Ok(vec![0x80, *b]),
             UxnToken::LitShort(s) => {
                 let bytes = s.to_be_bytes();
-                return vec![0xA0, bytes[0], bytes[1]];
+                return Ok(vec![0xA0, bytes[0], bytes[1]]);
             }
-            UxnToken::LabelDefine(_) => return vec![],
+            UxnToken::LabelDefine(_) => return Ok(vec![]),
             UxnToken::RawAbsAddr(label) => {
-                println!("label is {}", label);
                 if let Some(addr) = labels.get(label) {
                     let bytes = addr.to_be_bytes();
-                    return vec![bytes[0], bytes[1]];
+                    return Ok(vec![bytes[0], bytes[1]]);
                 } else {
-                    panic!();
+                    return Err(GetBytesError::UndefinedLabel {
+                        label_name: label.clone(),
+                    });
                 }
             }
         }
@@ -507,20 +513,23 @@ mod tests {
 
         for (token, expected) in inputs.into_iter() {
             let returned = token.get_bytes(prog_counter, &labels);
-            assert_eq!(returned, expected);
+            assert_eq!(returned, Ok(expected));
         }
     }
 
-    // TODO should have better error
     // test `get_bytes` function with a label that hasn't been defined
     #[test]
-    #[should_panic]
     fn test_get_bytes_unrecognised_label() {
         let mut labels = HashMap::new();
         labels.insert("test_label".to_owned(), 0x1234);
 
         let input = UxnToken::RawAbsAddr("test_label_xyz".to_owned());
-        input.get_bytes(0, &labels);
+        let output = input.get_bytes(0, &labels);
+
+        assert_eq!(output, Err(
+                GetBytesError::UndefinedLabel {
+                    label_name: "test_label_xyz".to_owned(),
+                }));
     }
 
     #[test]
@@ -554,7 +563,7 @@ mod tests {
         let prog_counter = 0x70;
         let token = UxnToken::PadAbs(0x100);
         let returned = token.get_bytes(prog_counter, &labels);
-        assert_eq!(returned, vec![0x0; 0x90]);
+        assert_eq!(returned, Ok(vec![0x0; 0x90]));
     }
 
     // test get_bytes function when the program counter is not 0

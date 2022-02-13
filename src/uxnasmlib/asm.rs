@@ -18,6 +18,7 @@ pub enum AsmError {
     ZeroPageWrite,
     TokenParseError { parse_error: tokens::ParseError },
     Output { error: io::ErrorKind, msg: String },
+    UndefinedLabel { label_name: String },
 }
 
 impl Asm {
@@ -47,6 +48,14 @@ impl Asm {
         let mut bytes_encountered = 0usize;
         for i in &self.program {
             let next_token_bytes = i.get_bytes(bytes_encountered.try_into().unwrap(), &self.labels);
+            let next_token_bytes = match next_token_bytes {
+                Ok(next_token_bytes) => next_token_bytes,
+                Err(tokens::GetBytesError::UndefinedLabel{label_name: label_name}) => {
+                    return Err(AsmError::UndefinedLabel{
+                        label_name,
+                    });
+                },
+            };
 
             let bytes_to_write = if bytes_encountered + next_token_bytes.len() < 0x100 {
                 0
@@ -410,5 +419,21 @@ mod tests {
         input.output(&mut output);
 
         assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_output_unrecognised_label() {
+        let mut input = Asm {
+            program: vec!(
+                UxnToken::RawAbsAddr("unrecognised".to_owned()),
+            ),
+            labels: HashMap::new(),
+        };
+
+        let mut writer = Vec::new();
+        let output = input.output(&mut writer);
+
+        assert_eq!(output, Err(AsmError::UndefinedLabel{
+            label_name: "unrecognised".to_owned()}));
     }
 }
