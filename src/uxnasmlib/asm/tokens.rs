@@ -77,6 +77,33 @@ pub mod ops {
             return Ok(ret);
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+    
+        // test `get_bytes` function; for each possible op code,
+        // verify that the correct sequence of bytes is produced for it
+        #[test]
+        fn test_get_bytes_happy() {
+            let inputs = [
+                (OpCode::Brk, vec![0x00,]),
+                (OpCode::Deo, vec![0x17,]),
+            ];
+
+            for (input, expected_output) in inputs.into_iter() {
+                let input = OpObject{
+                    keep: false,
+                    ret: false,
+                    short: false,
+                    op_code: input
+                };
+
+                let output = input.get_bytes();
+                assert_eq!(output, expected_output);
+            }
+        }
+    }
 }
 
 use ops::OpObject;
