@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::Write;
+use std::io;
 use std::str::FromStr;
 
 mod tokens;
@@ -16,6 +17,7 @@ pub enum AsmError {
     AbsPaddingRegression,
     ZeroPageWrite,
     TokenParseError { parse_error: tokens::ParseError },
+    Output { error: io::ErrorKind, msg: String },
 }
 
 impl Asm {
@@ -38,7 +40,7 @@ impl Asm {
         return Ok(Asm { labels, program });
     }
 
-    pub fn output<W>(&mut self, mut target: W)
+    pub fn output<W>(&mut self, mut target: W) -> Result<(), AsmError>
     where
         W: Write,
     {
@@ -58,13 +60,16 @@ impl Asm {
                 if let Err(err) =
                     target.write(&next_token_bytes[(next_token_bytes.len() - bytes_to_write)..])
                 {
-                    println!("Error writing to file {:?}", err);
-                    std::process::exit(1);
+                    return Err(AsmError::Output{
+                        error: err.kind(),
+                        msg: err.to_string()
+                    });
                 }
             }
 
             bytes_encountered += next_token_bytes.len();
         }
+        return Ok(());
     }
 }
 
@@ -375,5 +380,35 @@ mod tests {
                 },
             })
         );
+    }
+
+    #[test]
+    fn test_output_happy() {
+        let mut input = Asm {
+            program: vec!(
+                UxnToken::PadAbs(0x102),
+                UxnToken::RawByte(0x1),
+                UxnToken::LitShort(0xaabb),
+                UxnToken::PadAbs(0x109),
+                UxnToken::LitByte(0x22),
+                UxnToken::PadRel(0x5),
+                UxnToken::LitByte(0x33),
+            ),
+            labels: HashMap::new(),
+        };
+
+        let expected_output = vec!(
+            0x00, 0x00, 0x1, 0xa0, 0xaa, 0xbb,
+            0x00, 0x00, 0x00,
+            0x80, 0x22,
+            0x00, 0x00, 0x00, 0x00, 0x00,
+            0x80, 0x33
+        );
+
+
+        let mut output = Vec::new();
+        input.output(&mut output);
+
+        assert_eq!(output, expected_output);
     }
 }
