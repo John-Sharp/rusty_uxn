@@ -284,7 +284,10 @@ impl UxnToken {
             }
             UxnToken::PadRel(n) => return vec![0x00; (*n).into()],
             UxnToken::RawByte(b) => return vec![*b],
-            UxnToken::RawShort(_) => return vec![0xdd],
+            UxnToken::RawShort(s) => {
+                let bytes = s.to_be_bytes();
+                return vec![bytes[0], bytes[1]];
+            },
             UxnToken::LitByte(b) => return vec![0x80, *b],
             UxnToken::LitShort(s) => {
                 let bytes = s.to_be_bytes();
@@ -492,8 +495,7 @@ mod tests {
             (UxnToken::PadAbs(0x100), vec![0x00; 0x100]),
             (UxnToken::PadRel(0x80), vec![0x00; 0x80]),
             (UxnToken::RawByte(0xab), vec![0xab]),
-            // TODO
-            (UxnToken::RawShort(0xabab), vec![0xdd]),
+            (UxnToken::RawShort(0xabcd), vec![0xab, 0xcd]),
             (UxnToken::LitByte(0xab), vec![0x80, 0xab]),
             (UxnToken::LitShort(0xabcd), vec![0xA0, 0xab, 0xcd]),
             (UxnToken::LabelDefine("test_label".to_owned()), vec![]),
