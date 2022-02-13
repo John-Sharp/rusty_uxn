@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::io;
 use std::str::FromStr;
+use std::fmt;
+use std::error;
 
 mod tokens;
 use tokens::UxnToken;
@@ -13,13 +15,36 @@ pub struct Asm {
 
 #[derive(Debug, PartialEq)]
 pub enum AsmError {
-    General,
     AbsPaddingRegression,
     ZeroPageWrite,
     TokenParseError { parse_error: tokens::ParseError },
     Output { error: io::ErrorKind, msg: String },
     UndefinedLabel { label_name: String },
 }
+
+impl fmt::Display for AsmError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AsmError::AbsPaddingRegression => {
+                write!(f, "attempt to pad to absolute program location behind current counter")
+            },
+            AsmError::ZeroPageWrite => {
+                write!(f, "zero page write")
+            },
+            AsmError::TokenParseError{parse_error} => {
+                write!(f, "failed to parse token: {}", parse_error)
+            },
+            AsmError::Output{error: _error, msg} => {
+                write!(f, "output error: {}", msg)
+            },
+            AsmError::UndefinedLabel{label_name} => {
+                write!(f, "undefined label: {}", label_name)
+            }
+        }
+    }
+}
+
+impl error::Error for AsmError {}
 
 impl Asm {
     pub fn assemble<I>(input: I) -> Result<Self, AsmError>
@@ -50,7 +75,7 @@ impl Asm {
             let next_token_bytes = i.get_bytes(bytes_encountered.try_into().unwrap(), &self.labels);
             let next_token_bytes = match next_token_bytes {
                 Ok(next_token_bytes) => next_token_bytes,
-                Err(tokens::GetBytesError::UndefinedLabel{label_name: label_name}) => {
+                Err(tokens::GetBytesError::UndefinedLabel{label_name}) => {
                     return Err(AsmError::UndefinedLabel{
                         label_name,
                     });
@@ -416,8 +441,9 @@ mod tests {
 
 
         let mut output = Vec::new();
-        input.output(&mut output);
+        let res = input.output(&mut output);
 
+        assert_eq!(res, Ok(()));
         assert_eq!(output, expected_output);
     }
 

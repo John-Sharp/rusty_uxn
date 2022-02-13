@@ -46,7 +46,7 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
 
     let input = BufReader::new(fp).lines().map(|l| l.unwrap());
 
-    let mut program = asm::Asm::assemble(input).unwrap();
+    let mut program = asm::Asm::assemble(input)?;
 
     let fp = match File::create(config.dst_path.as_path()) {
         Ok(fp) => fp,
@@ -58,7 +58,7 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
         }
     };
 
-    program.output(fp);
+    program.output(fp)?;
 
     return Ok(());
 }

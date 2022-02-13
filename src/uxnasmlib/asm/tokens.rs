@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::fmt;
 
 pub mod ops {
     use std::str::FromStr;
@@ -334,6 +335,19 @@ pub enum ParseError {
     RuneInvalidArg { rune: String, supplied_arg: String },
 }
 
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::RuneAbsentArg{rune} => {
+                write!(f, "'{}' missing argument", rune)
+            },
+            ParseError::RuneInvalidArg{rune, supplied_arg} => {
+                write!(f, "'{}' has invalid argument '{}'", rune, supplied_arg)
+            },
+        }
+    }
+}
+
 impl FromStr for UxnToken {
     type Err = ParseError;
 
@@ -574,7 +588,7 @@ mod tests {
         let labels = HashMap::new();
         let prog_counter = 0x170;
         let token = UxnToken::PadAbs(0x100);
-        token.get_bytes(prog_counter, &labels);
+        let _ = token.get_bytes(prog_counter, &labels);
     }
 
     // test num_bytes function when the program counter is not 0
@@ -586,7 +600,8 @@ mod tests {
         assert_eq!(returned, 0x90);
     }
 
-    // TODO need to return error test num_bytes function when the program counter is not 0 but the absolute padding is behind the program counter #[test]
+    // TODO need to return error test num_bytes function when the program counter is not 0 but the absolute padding is behind the program counter
+    #[test]
     #[should_panic]
     fn test_num_bytes_prog_counter_fail() {
         let prog_counter = 0x170;
