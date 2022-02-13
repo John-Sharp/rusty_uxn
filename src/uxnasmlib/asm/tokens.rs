@@ -46,16 +46,25 @@ pub mod ops {
                 return Err(ParseOpObjectError {});
             }
 
-            if s.len() > 3 {
+            let opcode = s.get(0..3);
+            if opcode.is_none() {
                 return Err(ParseOpObjectError {});
             }
 
-            let ret = match &s[0..3] {
-                "BRK" => OpObject {
+            let opcode = opcode.unwrap();
+
+            let mut ret = match opcode {
+                "BRK" => {
+                    if s.len() > 3 {
+                        return Err(ParseOpObjectError {});
+                    }
+
+                    OpObject {
                     keep: false,
                     ret: false,
                     short: false,
                     op_code: OpCode::Brk,
+                    }
                 },
                 "LIT" => OpObject {
                     keep: true,
@@ -72,7 +81,24 @@ pub mod ops {
                 _ => return Err(ParseOpObjectError {}),
             };
 
-            // TODO parse the mode flags
+            for mode_flag in s.chars().skip(3) {
+                match mode_flag {
+                    '2' => {
+                        ret.short = true;
+                    },
+                    'k' => {
+                        if ret.op_code == OpCode::Brk {
+                            return Err(ParseOpObjectError {});
+                        }
+
+                        ret.keep = true;
+                    },
+                    'r' => {
+                        ret.ret = true;
+                    },
+                    _ => return Err(ParseOpObjectError {}),
+                };
+            }
 
             return Ok(ret);
         }
@@ -166,6 +192,52 @@ pub mod ops {
             });
 
             assert_eq!(output, expected_output);
+        }
+
+        #[test]
+        fn test_from_str_happy_mode_flags() {
+            let input = "DEO2rk";
+            let expected_output = Ok(OpObject{
+                keep: true,
+                ret: true,
+                short: true,
+                op_code: OpCode::Deo,
+            });
+
+            let output = input.parse::<OpObject>();
+            assert_eq!(output, expected_output);
+
+            let input = "DEOkr2";
+            let expected_output = Ok(OpObject{
+                keep: true,
+                ret: true,
+                short: true,
+                op_code: OpCode::Deo,
+            });
+
+            let output = input.parse::<OpObject>();
+            assert_eq!(output, expected_output);
+
+            let input = "DEOr2";
+            let expected_output = Ok(OpObject{
+                keep: false,
+                ret: true,
+                short: true,
+                op_code: OpCode::Deo,
+            });
+
+            let output = input.parse::<OpObject>();
+            assert_eq!(output, expected_output);
+        }
+
+        #[test]
+        fn test_from_str_forbidden_mode_flags() {
+            let inputs = ["BRKr", "BRKk", "BRK2", "LITk"];
+
+            for input in inputs {
+                let output = input.parse::<OpObject>();
+                assert_eq!(output, Err(ParseOpObjectError {}));
+            }
         }
 
         #[test]
@@ -503,10 +575,7 @@ mod tests {
         assert_eq!(returned, 0x90);
     }
 
-    // TODO need to return error
-    // test num_bytes function when the program counter is not 0
-    // but the absolute padding is behind the program counter
-    #[test]
+    // TODO need to return error test num_bytes function when the program counter is not 0 but the absolute padding is behind the program counter #[test]
     #[should_panic]
     fn test_num_bytes_prog_counter_fail() {
         let prog_counter = 0x170;
