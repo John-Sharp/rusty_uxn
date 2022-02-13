@@ -35,7 +35,7 @@ pub mod ops {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     pub struct ParseOpObjectError {}
 
     impl FromStr for OpObject {
@@ -101,6 +101,84 @@ pub mod ops {
 
                 let output = input.get_bytes();
                 assert_eq!(output, expected_output);
+            }
+        }
+
+        // test `get_bytes` function; verify that a selection
+        // of modifier flags leads to the correct output
+        #[test]
+        fn test_get_bytes_happy_with_modifiers() {
+            let input = OpObject{
+                keep: true,
+                ret: false,
+                short: true,
+                op_code: OpCode::Deo,
+            };
+            let expected_output = vec![0xb7,];
+            let output = input.get_bytes();
+
+            assert_eq!(output, expected_output);
+
+            let input = OpObject{
+                keep: true,
+                ret: true,
+                short: false,
+                op_code: OpCode::Deo,
+            };
+            let expected_output = vec![0xd7,];
+            let output = input.get_bytes();
+
+            assert_eq!(output, expected_output);
+        }
+
+        // test `from_str` function for operation
+        // strings with no modifier flags
+        #[test]
+        fn test_from_str_happy() {
+            let inputs = [
+                ("BRK", OpCode::Brk),
+                ("DEO", OpCode::Deo),
+            ];
+
+            for (input, expected_output) in inputs {
+                let output = input.parse::<OpObject>();
+                let expected_output = Ok(OpObject{
+                    keep: false,
+                    ret: false,
+                    short: false,
+                    op_code: expected_output,
+                });
+
+                assert_eq!(output, expected_output);
+            }
+        }
+
+        // test `from_str` function for LIT operation
+        // string with no modifier flags
+        #[test]
+        fn test_from_str_happy_lit() {
+            let output = "LIT".parse::<OpObject>();
+            let expected_output = Ok(OpObject{
+                keep: true,
+                ret: false,
+                short: false,
+                op_code: OpCode::Brk,
+            });
+
+            assert_eq!(output, expected_output);
+        }
+
+        #[test]
+        fn test_from_str_unrecognised_op_string() {
+            let inputs = [
+                "BRKK",
+                "BOK",
+                "BK",
+            ];
+
+            for input in inputs {
+                let output = input.parse::<OpObject>();
+                assert_eq!(output, Err(ParseOpObjectError{}));
             }
         }
     }
