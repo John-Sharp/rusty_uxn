@@ -5,6 +5,17 @@ use std::str::FromStr;
 use std::fmt;
 use std::error;
 
+pub mod prog_state {
+    use std::collections::HashMap;
+
+    pub struct ProgState<'a> {
+        pub counter: u16,
+        pub labels: &'a HashMap<String, u16>,
+    }
+}
+
+use prog_state::ProgState;
+
 mod tokens;
 use tokens::UxnToken;
 
@@ -71,8 +82,10 @@ impl Asm {
         W: Write,
     {
         let mut bytes_encountered = 0usize;
+        let mut prog_state = ProgState{counter: 0, labels: &self.labels};
         for i in &self.program {
-            let next_token_bytes = i.get_bytes(bytes_encountered.try_into().unwrap(), &self.labels);
+            prog_state.counter = bytes_encountered.try_into().unwrap();
+            let next_token_bytes = i.get_bytes(&prog_state);
             let next_token_bytes = match next_token_bytes {
                 Ok(next_token_bytes) => next_token_bytes,
                 Err(tokens::GetBytesError::UndefinedLabel{label_name}) => {

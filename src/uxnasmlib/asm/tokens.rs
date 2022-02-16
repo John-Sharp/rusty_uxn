@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::fmt;
+use crate::uxnasmlib::asm::prog_state::ProgState;
 
 pub mod ops {
     use std::str::FromStr;
@@ -286,12 +286,12 @@ pub enum GetBytesError {
 }
 
 impl UxnToken {
-    pub fn get_bytes(&self, prog_counter: u16, labels: &HashMap<String, u16>) -> Result<Vec<u8>, GetBytesError> {
+    pub fn get_bytes(&self, prog_state: &ProgState) -> Result<Vec<u8>, GetBytesError> {
         match self {
             UxnToken::Op(o) => return Ok(o.get_bytes()),
             UxnToken::MacroInvocation(_) => return Ok(vec![0xaa, 0xbb]),
             UxnToken::PadAbs(n) => {
-                let bytes_to_write = *n - prog_counter;
+                let bytes_to_write = *n - prog_state.counter;
 
                 return Ok(vec![0x00; bytes_to_write.into()]);
             }
@@ -310,7 +310,7 @@ impl UxnToken {
             UxnToken::SubLabelDefine(_) => return Ok(vec![]),
             UxnToken::RawAbsAddr(label) => {
                 // TODO allow use of sub labels here
-                if let Some(addr) = labels.get(label) {
+                if let Some(addr) = prog_state.labels.get(label) {
                     let bytes = addr.to_be_bytes();
                     return Ok(vec![bytes[0], bytes[1]]);
                 } else {
@@ -513,14 +513,15 @@ impl FromStr for UxnToken {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     // test `get_bytes` function; for each possible input token,
     // verify that the correct sequence of bytes is produced for it
     #[test]
     fn test_get_bytes_happy() {
-        let prog_counter = 0x0;
         let mut labels = HashMap::new();
         labels.insert("test_label".to_owned(), 0x1234);
+        let prog_state = ProgState{counter: 0x0, labels: &labels};
 
         let inputs = [
             (
@@ -547,7 +548,7 @@ mod tests {
         ];
 
         for (token, expected) in inputs.into_iter() {
-            let returned = token.get_bytes(prog_counter, &labels);
+            let returned = token.get_bytes(&prog_state);
             assert_eq!(returned, Ok(expected));
         }
     }
@@ -559,7 +560,7 @@ mod tests {
         labels.insert("test_label".to_owned(), 0x1234);
 
         let input = UxnToken::RawAbsAddr("test_label_xyz".to_owned());
-        let output = input.get_bytes(0, &labels);
+        let output = input.get_bytes(&ProgState{counter: 0, labels: &labels});
 
         assert_eq!(output, Err(
                 GetBytesError::UndefinedLabel {
@@ -595,10 +596,9 @@ mod tests {
     // test get_bytes function when the program counter is not 0
     #[test]
     fn test_get_bytes_prog_counter() {
-        let labels = HashMap::new();
-        let prog_counter = 0x70;
+        let prog_state = ProgState{counter: 0x70, labels: &HashMap::new()};
         let token = UxnToken::PadAbs(0x100);
-        let returned = token.get_bytes(prog_counter, &labels);
+        let returned = token.get_bytes(&prog_state);
         assert_eq!(returned, Ok(vec![0x0; 0x90]));
     }
 
@@ -607,10 +607,9 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_get_bytes_prog_counter_fail() {
-        let labels = HashMap::new();
-        let prog_counter = 0x170;
+        let prog_state = ProgState{counter: 0x170, labels: &HashMap::new()};
         let token = UxnToken::PadAbs(0x100);
-        let _ = token.get_bytes(prog_counter, &labels);
+        let _ = token.get_bytes(&prog_state);
     }
 
     // test num_bytes function when the program counter is not 0
