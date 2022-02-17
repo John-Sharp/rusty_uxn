@@ -1,6 +1,7 @@
 use std::str::FromStr;
 use std::fmt;
 use crate::uxnasmlib::asm::prog_state::ProgState;
+use crate::uxnasmlib::asm::prog_state::Label;
 
 pub mod ops {
     use std::str::FromStr;
@@ -308,14 +309,14 @@ impl UxnToken {
             }
             UxnToken::LabelDefine(_) => return Ok(vec![]),
             UxnToken::SubLabelDefine(_) => return Ok(vec![]),
-            UxnToken::RawAbsAddr(label) => {
+            UxnToken::RawAbsAddr(label_name) => {
                 // TODO allow use of sub labels here
-                if let Some(addr) = prog_state.labels.get(label) {
-                    let bytes = addr.to_be_bytes();
+                if let Some(label) = prog_state.labels.get(label_name) {
+                    let bytes = label.address.to_be_bytes();
                     return Ok(vec![bytes[0], bytes[1]]);
                 } else {
                     return Err(GetBytesError::UndefinedLabel {
-                        label_name: label.clone(),
+                        label_name: label_name.clone(),
                     });
                 }
             }
@@ -520,7 +521,7 @@ mod tests {
     #[test]
     fn test_get_bytes_happy() {
         let mut labels = HashMap::new();
-        labels.insert("test_label".to_owned(), 0x1234);
+        labels.insert("test_label".to_owned(), Label::new(0x1234));
         let prog_state = ProgState{counter: 0x0, labels: &labels};
 
         let inputs = [
@@ -557,7 +558,7 @@ mod tests {
     #[test]
     fn test_get_bytes_unrecognised_label() {
         let mut labels = HashMap::new();
-        labels.insert("test_label".to_owned(), 0x1234);
+        labels.insert("test_label".to_owned(), Label::new(0x1234));
 
         let input = UxnToken::RawAbsAddr("test_label_xyz".to_owned());
         let output = input.get_bytes(&ProgState{counter: 0, labels: &labels});

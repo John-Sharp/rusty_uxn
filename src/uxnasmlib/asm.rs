@@ -8,20 +8,33 @@ use std::error;
 pub mod prog_state {
     use std::collections::HashMap;
 
+    #[derive(Debug, PartialEq)]
+    pub struct Label {
+        pub address: u16,
+        pub sub_labels: HashMap<String, u16>,
+    }
+
+    impl Label {
+        pub fn new(address: u16) -> Self {
+            Label{address, sub_labels: HashMap::new()}
+        }
+    }
+
     pub struct ProgState<'a> {
         pub counter: u16,
-        pub labels: &'a HashMap<String, u16>,
+        pub labels: &'a HashMap<String, Label>,
     }
 }
 
 use prog_state::ProgState;
+use prog_state::Label;
 
 mod tokens;
 use tokens::UxnToken;
 
 pub struct Asm {
     program: Vec<UxnToken>,
-    labels: HashMap<String, u16>,
+    labels: HashMap<String, Label>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -159,12 +172,13 @@ where
 
 fn validate_tokens<'a, I: 'a>(
     input: I,
-    labels: &'a mut HashMap<String, u16>,
+    labels: &'a mut HashMap<String, Label>,
 ) -> impl Iterator<Item = Result<UxnToken, AsmError>> + 'a
 where
     I: Iterator<Item = Result<UxnToken, tokens::ParseError>>,
 {
     let mut prog_loc = 0u16;
+    let mut current_label = None;
 
     input.map(move |t| match t {
         Ok(t) => {
@@ -180,8 +194,19 @@ where
                     prog_loc += t.num_bytes(prog_loc);
                 }
                 UxnToken::LabelDefine(ref label_name) => {
-                    labels.insert(label_name.clone(), prog_loc);
-                }
+                    current_label = Some(label_name.clone());
+                    let label = Label::new(prog_loc);
+                    labels.insert(label_name.clone(), label);
+                },
+                UxnToken::SubLabelDefine(ref sub_label_name) => {
+                    // TODO need to test this
+                    if let Some(current_label) = &current_label {
+                        labels.get_mut(current_label).unwrap().sub_labels.insert(
+                            sub_label_name.clone(), prog_loc);
+                    } else {
+                        panic!(); // TODO can either fail or add sub label under "" label
+                    }
+                },
                 _ => {
                     if prog_loc < 0x100 {
                         return Err(AsmError::ZeroPageWrite);
@@ -364,8 +389,8 @@ mod tests {
         assert_eq!(output, expected_output);
 
         let mut expected_labels = HashMap::new();
-        expected_labels.insert("test_label".to_owned(), 0x100);
-        expected_labels.insert("test_label2".to_owned(), 0x105);
+        expected_labels.insert("test_label".to_owned(), Label::new(0x100));
+        expected_labels.insert("test_label2".to_owned(), Label::new(0x105));
         assert_eq!(labels, expected_labels);
     }
 
