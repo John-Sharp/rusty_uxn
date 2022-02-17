@@ -261,6 +261,30 @@ pub mod ops {
 use ops::OpObject;
 
 #[derive(Debug, PartialEq)]
+pub enum LabelRef {
+    Label { label_name: String },
+    FullSubLabel { label_name: String, sub_label_name: String },
+    SubLabel { sub_label_name: String },
+}
+
+impl FromStr for LabelRef {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let c1 = s.get(0..1);
+
+        if let Some("&") = c1 {
+            return Ok(LabelRef::SubLabel{
+                sub_label_name: s[1..].to_owned()});
+        }
+
+        // TODO parse FullSubLabel
+
+        return Ok(LabelRef::Label{label_name: s.to_owned()});
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum UxnToken {
     Op(OpObject),
     // MacroDefine,
@@ -515,6 +539,20 @@ impl FromStr for UxnToken {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+
+    #[test]
+    fn test_label_ref_from_str() {
+        let inputs = [
+            ("test_label", LabelRef::Label{label_name: "test_label".to_owned()}),
+            ("&sub_label", LabelRef::SubLabel{sub_label_name: "sub_label".to_owned()}),
+        ];
+
+        for (input, expected) in inputs.into_iter() {
+            let returned = input.parse::<LabelRef>();
+            assert_eq!(returned, Ok(expected));
+        }
+    }
 
     // test `get_bytes` function; for each possible input token,
     // verify that the correct sequence of bytes is produced for it
