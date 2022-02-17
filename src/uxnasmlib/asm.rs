@@ -44,6 +44,7 @@ pub enum AsmError {
     TokenParseError { parse_error: tokens::ParseError },
     Output { error: io::ErrorKind, msg: String },
     UndefinedLabel { label_name: String },
+    SubLabelWithNoLabel { sub_label_name: String},
 }
 
 impl fmt::Display for AsmError {
@@ -63,6 +64,10 @@ impl fmt::Display for AsmError {
             },
             AsmError::UndefinedLabel{label_name} => {
                 write!(f, "undefined label: {}", label_name)
+            }
+            AsmError::SubLabelWithNoLabel{sub_label_name} => {
+                write!(f, "sub-label defined before label: {}",
+                       sub_label_name)
             }
         }
     }
@@ -199,12 +204,12 @@ where
                     labels.insert(label_name.clone(), label);
                 },
                 UxnToken::SubLabelDefine(ref sub_label_name) => {
-                    // TODO need to test this
                     if let Some(current_label) = &current_label {
                         labels.get_mut(current_label).unwrap().sub_labels.insert(
                             sub_label_name.clone(), prog_loc);
                     } else {
-                        panic!(); // TODO can either fail or add sub label under "" label
+                        return Err(AsmError::SubLabelWithNoLabel{
+                            sub_label_name: sub_label_name.clone()});
                     }
                 },
                 _ => {
@@ -356,7 +361,7 @@ mod tests {
     }
 
     // test `validate_tokens` function with labels; test having
-    // labels in the token stream and check they're location
+    // labels in the token stream and check their location
     // is stored as expected in a hash map
     #[test]
     fn test_validate_tokens_happy_label() {
@@ -393,6 +398,81 @@ mod tests {
         expected_labels.insert("test_label2".to_owned(), Label::new(0x105));
         assert_eq!(labels, expected_labels);
     }
+
+    // test `validate_tokens` function with sub-labels; test having
+    // sub-labels in the token stream and check their location
+    // is stored as expected in a hash map
+    #[test]
+    fn test_validate_tokens_happy_sub_label() {
+        let mut labels = HashMap::new();
+        let input = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::LabelDefine("test_label".to_owned())),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::SubLabelDefine("test_sub_label2".to_owned())),
+            Ok(UxnToken::LabelDefine("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+            Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
+        ];
+
+        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
+
+        let expected_output: Vec<Result<UxnToken, AsmError>>;
+        expected_output = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::LabelDefine("test_label".to_owned())),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::SubLabelDefine("test_sub_label2".to_owned())),
+            Ok(UxnToken::LabelDefine("test_label2".to_owned())),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+            Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
+        ];
+
+        assert_eq!(output, expected_output);
+
+        let mut expected_labels = HashMap::new();
+        expected_labels.insert("test_label".to_owned(), Label::new(0x100));
+        expected_labels.insert("test_label2".to_owned(), Label::new(0x106));
+        expected_labels.get_mut("test_label").unwrap().sub_labels.insert(
+            "test_sub_label".to_owned(), 0x105);
+        expected_labels.get_mut("test_label").unwrap().sub_labels.insert(
+            "test_sub_label2".to_owned(), 0x106);
+
+        expected_labels.get_mut("test_label2").unwrap().sub_labels.insert(
+            "test_sub_label".to_owned(), 0x10a);
+
+        assert_eq!(labels, expected_labels);
+    }
+
+    // test `validate_tokens` function sub-labels without labels error;
+    // test having a sub-label in the token stream before any label
+    // is defined and check the correct error is returned
+    #[test]
+    fn test_validate_tokens_sub_label_without_label() {
+        let mut labels = HashMap::new();
+
+        let input = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
+        ];
+
+        let output =
+            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
+
+        assert_eq!(output, Err(AsmError::SubLabelWithNoLabel{
+            sub_label_name: "test_sub_label".to_owned()}));
+    }
+
 
     // test `validate_tokens` function padding regression error;
     // test having two absolute paddings, one padding to before
