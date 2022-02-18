@@ -44,6 +44,7 @@ pub enum AsmError {
     TokenParseError { parse_error: tokens::ParseError },
     Output { error: io::ErrorKind, msg: String },
     UndefinedLabel { label_name: String },
+    UndefinedSubLabel { label_name: String, sub_label_name: String },
     SubLabelWithNoLabel { sub_label_name: String},
 }
 
@@ -64,6 +65,9 @@ impl fmt::Display for AsmError {
             },
             AsmError::UndefinedLabel{label_name} => {
                 write!(f, "undefined label: {}", label_name)
+            }
+            AsmError::UndefinedSubLabel{label_name, sub_label_name} => {
+                write!(f, "undefined sub-label: {}/{}", label_name, sub_label_name)
             }
             AsmError::SubLabelWithNoLabel{sub_label_name} => {
                 write!(f, "sub-label defined before label: {}",
@@ -109,6 +113,12 @@ impl Asm {
                 Err(tokens::GetBytesError::UndefinedLabel{label_name}) => {
                     return Err(AsmError::UndefinedLabel{
                         label_name,
+                    });
+                },
+                Err(tokens::GetBytesError::UndefinedSubLabel{label_name, sub_label_name}) => {
+                    return Err(AsmError::UndefinedSubLabel{
+                        label_name,
+                        sub_label_name,
                     });
                 },
             };

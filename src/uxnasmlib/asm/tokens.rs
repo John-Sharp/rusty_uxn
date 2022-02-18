@@ -318,6 +318,7 @@ pub enum UxnToken {
 #[derive(Debug, PartialEq)]
 pub enum GetBytesError {
     UndefinedLabel { label_name: String },
+    UndefinedSubLabel { label_name: String, sub_label_name: String },
 }
 
 impl UxnToken {
@@ -362,9 +363,17 @@ impl UxnToken {
                             label_name: sub_label_name.clone(),
                         });
                     },
-                    LabelRef::FullSubLabel{label_name: _label_name, sub_label_name} => {
-                        return Err(GetBytesError::UndefinedLabel {
-                            label_name: sub_label_name.clone(),
+                    LabelRef::FullSubLabel{label_name: label_name, sub_label_name} => {
+                        if let Some(label) = prog_state.labels.get(label_name) {
+                            if let Some(sub_label) = label.sub_labels.get(sub_label_name) {
+                                let bytes = sub_label.to_be_bytes();
+                                return Ok(vec![bytes[0], bytes[1]]);
+                            }   
+                        }
+
+                        return Err(GetBytesError::UndefinedSubLabel {
+                            label_name: label_name.clone(),
+                            sub_label_name: sub_label_name.clone(),
                         });
                     },
                 }
@@ -593,6 +602,9 @@ mod tests {
     fn test_get_bytes_happy() {
         let mut labels = HashMap::new();
         labels.insert("test_label".to_owned(), Label::new(0x1234));
+        labels.insert("test_label2".to_owned(), Label::new(0x1235));
+        labels.get_mut("test_label2").unwrap()
+            .sub_labels.insert("sub_label".to_owned(), 0x4576);
         let prog_state = ProgState{counter: 0x0, labels: &labels};
 
         let inputs = [
@@ -617,6 +629,10 @@ mod tests {
                 UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap()),
                 vec![0x12, 0x34],
             ),
+            (
+                UxnToken::RawAbsAddr("test_label2/sub_label".parse::<LabelRef>().unwrap()),
+                vec![0x45, 0x76],
+            ),
         ];
 
         for (token, expected) in inputs.into_iter() {
@@ -637,6 +653,25 @@ mod tests {
         assert_eq!(output, Err(
                 GetBytesError::UndefinedLabel {
                     label_name: "test_label_xyz".to_owned(),
+                }));
+    }
+
+    // test `get_bytes` function with a full sub-label that hasn't been defined
+    #[test]
+    fn test_get_bytes_unrecognised_sub_label_full() {
+        let mut labels = HashMap::new();
+        labels.insert("test_label".to_owned(), Label::new(0x1234));
+        labels.get_mut("test_label").unwrap().sub_labels
+            .insert("sub_label".to_owned(), 0x4576);
+
+        let input = UxnToken::RawAbsAddr(
+            "test_label/sub_label_xyz".parse::<LabelRef>().unwrap());
+        let output = input.get_bytes(&ProgState{counter: 0, labels: &labels});
+
+        assert_eq!(output, Err(
+                GetBytesError::UndefinedSubLabel {
+                    label_name: "test_label".to_owned(),
+                    sub_label_name: "sub_label_xyz".to_owned(),
                 }));
     }
 
