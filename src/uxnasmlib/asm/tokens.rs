@@ -273,12 +273,22 @@ impl FromStr for LabelRef {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let c1 = s.get(0..1);
 
+        // attempt to parse as partial sub-label
         if let Some("&") = c1 {
             return Ok(LabelRef::SubLabel{
                 sub_label_name: s[1..].to_owned()});
         }
 
-        // TODO parse FullSubLabel
+        // attempt to parse as full sub-label
+        if let Some((label_name, sub_label_name)) = s.split_once('/') {
+            let label_name = label_name.to_owned();
+            let sub_label_name = sub_label_name.to_owned();
+
+            return Ok(LabelRef::FullSubLabel{
+                label_name,
+                sub_label_name
+            });
+        }
 
         return Ok(LabelRef::Label{label_name: s.to_owned()});
     }
@@ -298,7 +308,7 @@ pub enum UxnToken {
     // LitAddressZeroPage(String),
     // LitAddressRel(String),
     // LitAddressAbs(String),
-    RawAbsAddr(String),
+    RawAbsAddr(LabelRef),
     MacroInvocation(String),
     RawByte(u8),
     RawShort(u16),
@@ -333,16 +343,32 @@ impl UxnToken {
             }
             UxnToken::LabelDefine(_) => return Ok(vec![]),
             UxnToken::SubLabelDefine(_) => return Ok(vec![]),
-            UxnToken::RawAbsAddr(label_name) => {
+            UxnToken::RawAbsAddr(label_ref) => {
+
                 // TODO allow use of sub labels here
-                if let Some(label) = prog_state.labels.get(label_name) {
-                    let bytes = label.address.to_be_bytes();
-                    return Ok(vec![bytes[0], bytes[1]]);
-                } else {
-                    return Err(GetBytesError::UndefinedLabel {
-                        label_name: label_name.clone(),
-                    });
+                match label_ref {
+                    LabelRef::Label{label_name} => {
+                        if let Some(label) = prog_state.labels.get(label_name) {
+                            let bytes = label.address.to_be_bytes();
+                            return Ok(vec![bytes[0], bytes[1]]);
+                        } else {
+                            return Err(GetBytesError::UndefinedLabel {
+                                label_name: label_name.clone(),
+                            });
+                        }
+                    },
+                    LabelRef::SubLabel{sub_label_name} => {
+                        return Err(GetBytesError::UndefinedLabel {
+                            label_name: sub_label_name.clone(),
+                        });
+                    },
+                    LabelRef::FullSubLabel{label_name: _label_name, sub_label_name} => {
+                        return Err(GetBytesError::UndefinedLabel {
+                            label_name: sub_label_name.clone(),
+                        });
+                    },
                 }
+
             }
         }
     }
@@ -528,7 +554,9 @@ impl FromStr for UxnToken {
                 });
             }
 
-            return Ok(UxnToken::RawAbsAddr((&s[1..]).to_owned()));
+            let label_ref = s[1..].parse::<LabelRef>().unwrap();
+
+            return Ok(UxnToken::RawAbsAddr(label_ref));
         }
 
         return Ok(UxnToken::MacroInvocation(s.to_owned()));
@@ -541,11 +569,16 @@ mod tests {
     use std::collections::HashMap;
 
 
+    // test `from_str()` for `LabelRef`; test that each type of label
+    // can be correctly parsed
     #[test]
     fn test_label_ref_from_str() {
         let inputs = [
             ("test_label", LabelRef::Label{label_name: "test_label".to_owned()}),
             ("&sub_label", LabelRef::SubLabel{sub_label_name: "sub_label".to_owned()}),
+            ("test_label/sub_label", LabelRef::FullSubLabel{
+                label_name: "test_label".to_owned(),
+                sub_label_name: "sub_label".to_owned()}),
         ];
 
         for (input, expected) in inputs.into_iter() {
@@ -581,7 +614,7 @@ mod tests {
             (UxnToken::LabelDefine("test_label".to_owned()), vec![]),
             (UxnToken::SubLabelDefine("test_sub_label".to_owned()), vec![]),
             (
-                UxnToken::RawAbsAddr("test_label".to_owned()),
+                UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap()),
                 vec![0x12, 0x34],
             ),
         ];
@@ -598,7 +631,7 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert("test_label".to_owned(), Label::new(0x1234));
 
-        let input = UxnToken::RawAbsAddr("test_label_xyz".to_owned());
+        let input = UxnToken::RawAbsAddr("test_label_xyz".parse::<LabelRef>().unwrap());
         let output = input.get_bytes(&ProgState{counter: 0, labels: &labels});
 
         assert_eq!(output, Err(
@@ -623,7 +656,7 @@ mod tests {
             (UxnToken::LitShort(0xabcd), 0x3),
             (UxnToken::LabelDefine("test_label".to_owned()), 0x0),
             (UxnToken::SubLabelDefine("test_sub_label".to_owned()), 0x0),
-            (UxnToken::RawAbsAddr("test_label".to_owned()), 0x2),
+            (UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap()), 0x2),
         ];
 
         for (token, expected) in inputs.into_iter() {
@@ -742,7 +775,7 @@ mod tests {
     fn test_from_str_raw_abs_address() {
         let input = ":test_label";
         let output = input.parse::<UxnToken>();
-        let expected = UxnToken::RawAbsAddr("test_label".to_owned());
+        let expected = UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap());
         assert_eq!(output, Ok(expected));
     }
 

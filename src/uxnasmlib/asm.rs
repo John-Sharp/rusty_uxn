@@ -255,6 +255,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokens::LabelRef;
 
     // test `split_to_token_strings` function; create input with
     // bracket separators and assert that it is split as expected
@@ -370,11 +371,11 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
         ];
 
         let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
@@ -384,11 +385,11 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
         ];
 
         assert_eq!(output, expected_output);
@@ -409,14 +410,14 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
             Ok(UxnToken::SubLabelDefine("test_sub_label2".to_owned())),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
         ];
 
@@ -427,14 +428,14 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
             Ok(UxnToken::SubLabelDefine("test_sub_label2".to_owned())),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".to_owned())),
+            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
         ];
 
@@ -569,7 +570,7 @@ mod tests {
     fn test_output_unrecognised_label() {
         let mut input = Asm {
             program: vec!(
-                UxnToken::RawAbsAddr("unrecognised".to_owned()),
+                UxnToken::RawAbsAddr("unrecognised".parse::<LabelRef>().unwrap()),
             ),
             labels: HashMap::new(),
         };
