@@ -23,6 +23,7 @@ pub mod prog_state {
     pub struct ProgState<'a> {
         pub counter: u16,
         pub labels: &'a HashMap<String, Label>,
+        pub current_label: String,
     }
 }
 
@@ -104,9 +105,18 @@ impl Asm {
         W: Write,
     {
         let mut bytes_encountered = 0usize;
-        let mut prog_state = ProgState{counter: 0, labels: &self.labels};
+        let mut prog_state = ProgState{
+            counter: 0,
+            labels: &self.labels,
+            current_label: "".to_owned()};
+
         for i in &self.program {
             prog_state.counter = bytes_encountered.try_into().unwrap();
+
+            if let UxnToken::LabelDefine(label_name) = i {
+                prog_state.current_label = label_name.clone();
+            }
+
             let next_token_bytes = i.get_bytes(&prog_state);
             let next_token_bytes = match next_token_bytes {
                 Ok(next_token_bytes) => next_token_bytes,

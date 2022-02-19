@@ -346,7 +346,6 @@ impl UxnToken {
             UxnToken::SubLabelDefine(_) => return Ok(vec![]),
             UxnToken::RawAbsAddr(label_ref) => {
 
-                // TODO allow use of sub labels here
                 match label_ref {
                     LabelRef::Label{label_name} => {
                         if let Some(label) = prog_state.labels.get(label_name) {
@@ -359,8 +358,18 @@ impl UxnToken {
                         }
                     },
                     LabelRef::SubLabel{sub_label_name} => {
-                        return Err(GetBytesError::UndefinedLabel {
-                            label_name: sub_label_name.clone(),
+                        let label_name = &prog_state.current_label;
+
+                        if let Some(label) = prog_state.labels.get(label_name) {
+                            if let Some(sub_label) = label.sub_labels.get(sub_label_name) {
+                                let bytes = sub_label.to_be_bytes();
+                                return Ok(vec![bytes[0], bytes[1]]);
+                            }   
+                        }
+
+                        return Err(GetBytesError::UndefinedSubLabel {
+                            label_name: label_name.clone(),
+                            sub_label_name: sub_label_name.clone(),
                         });
                     },
                     LabelRef::FullSubLabel{label_name: label_name, sub_label_name} => {
@@ -605,7 +614,13 @@ mod tests {
         labels.insert("test_label2".to_owned(), Label::new(0x1235));
         labels.get_mut("test_label2").unwrap()
             .sub_labels.insert("sub_label".to_owned(), 0x4576);
-        let prog_state = ProgState{counter: 0x0, labels: &labels};
+        labels.get_mut("test_label2").unwrap()
+            .sub_labels.insert("sub_label2".to_owned(), 0x9876);
+
+        let prog_state = ProgState{
+            counter: 0x0,
+            labels: &labels,
+            current_label: "test_label2".to_owned()};
 
         let inputs = [
             (
@@ -633,6 +648,10 @@ mod tests {
                 UxnToken::RawAbsAddr("test_label2/sub_label".parse::<LabelRef>().unwrap()),
                 vec![0x45, 0x76],
             ),
+            (
+                UxnToken::RawAbsAddr("&sub_label2".parse::<LabelRef>().unwrap()),
+                vec![0x98, 0x76],
+            ),
         ];
 
         for (token, expected) in inputs.into_iter() {
@@ -648,7 +667,10 @@ mod tests {
         labels.insert("test_label".to_owned(), Label::new(0x1234));
 
         let input = UxnToken::RawAbsAddr("test_label_xyz".parse::<LabelRef>().unwrap());
-        let output = input.get_bytes(&ProgState{counter: 0, labels: &labels});
+        let output = input.get_bytes(&ProgState{
+            counter: 0,
+            labels: &labels,
+            current_label: "".to_owned()});
 
         assert_eq!(output, Err(
                 GetBytesError::UndefinedLabel {
@@ -666,12 +688,38 @@ mod tests {
 
         let input = UxnToken::RawAbsAddr(
             "test_label/sub_label_xyz".parse::<LabelRef>().unwrap());
-        let output = input.get_bytes(&ProgState{counter: 0, labels: &labels});
+        let output = input.get_bytes(&ProgState{
+            counter: 0,
+            labels: &labels,
+            current_label: "".to_owned()});
 
         assert_eq!(output, Err(
                 GetBytesError::UndefinedSubLabel {
                     label_name: "test_label".to_owned(),
                     sub_label_name: "sub_label_xyz".to_owned(),
+                }));
+    }
+
+    // test `get_bytes` function with a partial sub-label that hasn't been defined
+    #[test]
+    fn test_get_bytes_unrecognised_sub_label_partial() {
+        let mut labels = HashMap::new();
+        labels.insert("test_label".to_owned(), Label::new(0x1234));
+        labels.get_mut("test_label").unwrap().sub_labels
+            .insert("sub_label".to_owned(), 0x4576);
+        labels.insert("test_label2".to_owned(), Label::new(0x1234));
+
+        let input = UxnToken::RawAbsAddr(
+            "&sub_label".parse::<LabelRef>().unwrap());
+        let output = input.get_bytes(&ProgState{
+            counter: 0,
+            labels: &labels,
+            current_label: "test_label2".to_owned()});
+
+        assert_eq!(output, Err(
+                GetBytesError::UndefinedSubLabel {
+                    label_name: "test_label2".to_owned(),
+                    sub_label_name: "sub_label".to_owned(),
                 }));
     }
 
@@ -703,7 +751,10 @@ mod tests {
     // test get_bytes function when the program counter is not 0
     #[test]
     fn test_get_bytes_prog_counter() {
-        let prog_state = ProgState{counter: 0x70, labels: &HashMap::new()};
+        let prog_state = ProgState{
+            counter: 0x70,
+            labels: &HashMap::new(),
+            current_label: "".to_owned()};
         let token = UxnToken::PadAbs(0x100);
         let returned = token.get_bytes(&prog_state);
         assert_eq!(returned, Ok(vec![0x0; 0x90]));
@@ -714,7 +765,10 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_get_bytes_prog_counter_fail() {
-        let prog_state = ProgState{counter: 0x170, labels: &HashMap::new()};
+        let prog_state = ProgState{
+            counter: 0x170,
+            labels: &HashMap::new(),
+            current_label: "".to_owned()};
         let token = UxnToken::PadAbs(0x100);
         let _ = token.get_bytes(&prog_state);
     }
