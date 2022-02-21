@@ -49,6 +49,8 @@ pub enum AsmError {
     LabelNotInZeroPage { label_name: String },
     SubLabelNotInZeroPage { label_name: String, sub_label_name: String },
     SubLabelWithNoLabel { sub_label_name: String},
+    RelLabelNotInRange { label_name: String },
+    RelSubLabelNotInRange { label_name: String, sub_label_name: String },
 }
 
 impl fmt::Display for AsmError {
@@ -81,6 +83,13 @@ impl fmt::Display for AsmError {
             AsmError::SubLabelWithNoLabel{sub_label_name} => {
                 write!(f, "sub-label defined before label: {}",
                        sub_label_name)
+            },
+            AsmError::RelLabelNotInRange{label_name} => {
+                write!(f, "relative label not in range: {}", label_name)
+            },
+            AsmError::RelSubLabelNotInRange{label_name, sub_label_name} => {
+                write!(f, "relative sub-label not in range: {}/{}",
+                       label_name, sub_label_name)
             },
         }
     }
@@ -146,6 +155,17 @@ impl Asm {
                 },
                 Err(tokens::GetBytesError::SubLabelNotInZeroPage{label_name, sub_label_name}) => {
                     return Err(AsmError::SubLabelNotInZeroPage{
+                        label_name,
+                        sub_label_name,
+                    });
+                },
+                Err(tokens::GetBytesError::RelLabelNotInRange{label_name}) => {
+                    return Err(AsmError::RelLabelNotInRange{
+                        label_name,
+                    });
+                },
+                Err(tokens::GetBytesError::RelSubLabelNotInRange{label_name, sub_label_name}) => {
+                    return Err(AsmError::RelSubLabelNotInRange{
                         label_name,
                         sub_label_name,
                     });
@@ -676,5 +696,46 @@ mod tests {
             label_name: "label".to_owned(),
             sub_label_name: "sub_label".to_owned(),
         }));
+    }
+
+    #[test]
+    fn test_output_label_not_in_range() {
+        let mut labels = HashMap::new();
+        labels.insert("label".to_owned(), Label::new(0xffff));
+
+        let mut input = Asm {
+            program: vec!(
+                UxnToken::LitAddressRel("label".parse::<LabelRef>().unwrap()),
+            ),
+            labels,
+        };
+
+        let mut writer = Vec::new();
+        let output = input.output(&mut writer);
+
+        assert_eq!(output, Err(AsmError::RelLabelNotInRange{
+            label_name: "label".to_owned(),}));
+    }
+
+    #[test]
+    fn test_output_sub_label_not_in_range() {
+        let mut labels = HashMap::new();
+        labels.insert("label".to_owned(), Label::new(0xfffc));
+        labels.get_mut("label").unwrap()
+            .sub_labels.insert("sub_label".to_owned(), 0xfffd);
+
+        let mut input = Asm {
+            program: vec!(
+                UxnToken::LitAddressRel("label/sub_label".parse::<LabelRef>().unwrap()),
+            ),
+            labels,
+        };
+
+        let mut writer = Vec::new();
+        let output = input.output(&mut writer);
+
+        assert_eq!(output, Err(AsmError::RelSubLabelNotInRange{
+            label_name: "label".to_owned(),
+            sub_label_name: "sub_label".to_owned()}));
     }
 }
