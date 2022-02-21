@@ -46,6 +46,8 @@ pub enum AsmError {
     Output { error: io::ErrorKind, msg: String },
     UndefinedLabel { label_name: String },
     UndefinedSubLabel { label_name: String, sub_label_name: String },
+    LabelNotInZeroPage { label_name: String },
+    SubLabelNotInZeroPage { label_name: String, sub_label_name: String },
     SubLabelWithNoLabel { sub_label_name: String},
 }
 
@@ -66,14 +68,20 @@ impl fmt::Display for AsmError {
             },
             AsmError::UndefinedLabel{label_name} => {
                 write!(f, "undefined label: {}", label_name)
-            }
+            },
             AsmError::UndefinedSubLabel{label_name, sub_label_name} => {
                 write!(f, "undefined sub-label: {}/{}", label_name, sub_label_name)
-            }
+            },
+            AsmError::LabelNotInZeroPage{label_name} => {
+                write!(f, "label not in zero page: {}", label_name)
+            },
+            AsmError::SubLabelNotInZeroPage{label_name, sub_label_name} => {
+                write!(f, "sub-label not in zero page: {}/{}", label_name, sub_label_name)
+            },
             AsmError::SubLabelWithNoLabel{sub_label_name} => {
                 write!(f, "sub-label defined before label: {}",
                        sub_label_name)
-            }
+            },
         }
     }
 }
@@ -127,6 +135,17 @@ impl Asm {
                 },
                 Err(tokens::GetBytesError::UndefinedSubLabel{label_name, sub_label_name}) => {
                     return Err(AsmError::UndefinedSubLabel{
+                        label_name,
+                        sub_label_name,
+                    });
+                },
+                Err(tokens::GetBytesError::LabelNotInZeroPage{label_name}) => {
+                    return Err(AsmError::LabelNotInZeroPage{
+                        label_name,
+                    });
+                },
+                Err(tokens::GetBytesError::SubLabelNotInZeroPage{label_name, sub_label_name}) => {
+                    return Err(AsmError::SubLabelNotInZeroPage{
                         label_name,
                         sub_label_name,
                     });
@@ -600,5 +619,62 @@ mod tests {
 
         assert_eq!(output, Err(AsmError::UndefinedLabel{
             label_name: "unrecognised".to_owned()}));
+    }
+
+    #[test]
+    fn test_output_unrecognised_sub_label() {
+        let mut input = Asm {
+            program: vec!(
+                UxnToken::RawAbsAddr("label/unrecognised".parse::<LabelRef>().unwrap()),
+            ),
+            labels: HashMap::new(),
+        };
+
+        let mut writer = Vec::new();
+        let output = input.output(&mut writer);
+
+        assert_eq!(output, Err(AsmError::UndefinedSubLabel{
+            label_name: "label".to_owned(),
+            sub_label_name: "unrecognised".to_owned()}));
+    }
+
+    #[test]
+    fn test_output_label_not_in_zero_page() {
+        let mut labels = HashMap::new();
+        labels.insert("label".to_owned(), Label::new(0x100));
+        let mut input = Asm {
+            program: vec!(
+                UxnToken::LitAddressZeroPage("label".parse::<LabelRef>().unwrap()),
+            ),
+            labels,
+        };
+
+        let mut writer = Vec::new();
+        let output = input.output(&mut writer);
+
+        assert_eq!(output, Err(AsmError::LabelNotInZeroPage{
+            label_name: "label".to_owned(),}));
+    }
+
+    #[test]
+    fn test_output_sub_label_not_in_zero_page() {
+        let mut labels = HashMap::new();
+        labels.insert("label".to_owned(), Label::new(0xfe));
+        labels.get_mut("label").unwrap()
+            .sub_labels.insert("sub_label".to_owned(), 0x101);
+        let mut input = Asm {
+            program: vec!(
+                UxnToken::LitAddressZeroPage("label/sub_label".parse::<LabelRef>().unwrap()),
+            ),
+            labels,
+        };
+
+        let mut writer = Vec::new();
+        let output = input.output(&mut writer);
+
+        assert_eq!(output, Err(AsmError::SubLabelNotInZeroPage{
+            label_name: "label".to_owned(),
+            sub_label_name: "sub_label".to_owned(),
+        }));
     }
 }

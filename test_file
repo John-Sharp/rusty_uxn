@@ -1,2 +1,2 @@
 ( hello.tal )
-|0100 ff &sublabel ff :&sublabel ff @label ff &sublabel ff ff @labelb ff &sublabel :&sublabel 
+|007f @label |008f &sub |0100 ff ff ff .label ff ff ff .label/sub ff ff ff .&sub ff ff ff
