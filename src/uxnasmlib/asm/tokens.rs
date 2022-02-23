@@ -307,7 +307,7 @@ pub enum UxnToken {
     LitShort(u16),
     LitAddressZeroPage(LabelRef),
     LitAddressRel(LabelRef),
-    // LitAddressAbs(LabelRef),
+    LitAddressAbs(LabelRef),
     RawAbsAddr(LabelRef),
     MacroInvocation(String),
     RawByte(u8),
@@ -447,6 +447,12 @@ impl UxnToken {
 
                 return Ok(vec![0x80, bytes[0]]);
             },
+            UxnToken::LitAddressAbs(label_ref) => {
+                let address = get_address_of_label(label_ref, prog_state)?;
+                let bytes = address.to_be_bytes();
+
+                return Ok(vec![0xa0, bytes[0], bytes[1]]);
+            },
             UxnToken::LabelDefine(_) => return Ok(vec![]),
             UxnToken::SubLabelDefine(_) => return Ok(vec![]),
             UxnToken::RawAbsAddr(label_ref) => {
@@ -469,6 +475,7 @@ impl UxnToken {
             UxnToken::LitShort(_) => return 0x3,
             UxnToken::LitAddressZeroPage(_) => return 0x2,
             UxnToken::LitAddressRel(_) => return 0x2,
+            UxnToken::LitAddressAbs(_) => return 0x3,
             UxnToken::LabelDefine(_) => return 0x0,
             UxnToken::SubLabelDefine(_) => return 0x0,
             UxnToken::RawAbsAddr(_) => return 0x2,
@@ -608,6 +615,18 @@ impl FromStr for UxnToken {
             let label_ref = s[1..].parse::<LabelRef>().unwrap();
 
             return Ok(UxnToken::LitAddressRel(label_ref));
+        }
+
+        if &s[0..1] == ";" {
+            if s.len() == 1 {
+                return Err(ParseError::RuneAbsentArg {
+                    rune: ";".to_owned(),
+                });
+            }
+
+            let label_ref = s[1..].parse::<LabelRef>().unwrap();
+
+            return Ok(UxnToken::LitAddressAbs(label_ref));
         }
 
         if &s[0..1] == "'" {
@@ -759,6 +778,18 @@ mod tests {
                 UxnToken::LitAddressRel("&sub_label2".parse::<LabelRef>().unwrap()),
                 vec![0x80, 0x73],
             ),
+            (
+                UxnToken::LitAddressAbs("test_label_zp".parse::<LabelRef>().unwrap()),
+                vec![0xa0, 0x00, 0x12],
+            ),
+            (
+                UxnToken::LitAddressAbs("test_label_zp/sub_label".parse::<LabelRef>().unwrap()),
+                vec![0xa0, 0x00, 0x15],
+            ),
+            (
+                UxnToken::LitAddressAbs("&sub_label2".parse::<LabelRef>().unwrap()),
+                vec![0xa0, 0x00, 0x76],
+            ),
             (UxnToken::LabelDefine("test_label".to_owned()), vec![]),
             (UxnToken::SubLabelDefine("test_sub_label".to_owned()), vec![]),
             (
@@ -791,6 +822,7 @@ mod tests {
             UxnToken::RawAbsAddr("test_label_xyz".parse::<LabelRef>().unwrap()),
             UxnToken::LitAddressZeroPage("test_label_xyz".parse::<LabelRef>().unwrap()),
             UxnToken::LitAddressRel("test_label_xyz".parse::<LabelRef>().unwrap()),
+            UxnToken::LitAddressAbs("test_label_xyz".parse::<LabelRef>().unwrap()),
         ];
 
         for input in inputs.into_iter() {
@@ -820,6 +852,8 @@ mod tests {
             UxnToken::LitAddressZeroPage(
                 "test_label/sub_label_xyz".parse::<LabelRef>().unwrap()),
             UxnToken::LitAddressRel(
+                "test_label/sub_label_xyz".parse::<LabelRef>().unwrap()),
+            UxnToken::LitAddressAbs(
                 "test_label/sub_label_xyz".parse::<LabelRef>().unwrap()),
         ];
 
@@ -853,6 +887,8 @@ mod tests {
                 "&sub_label".parse::<LabelRef>().unwrap()),
             UxnToken::LitAddressRel(
                 "&sub_label".parse::<LabelRef>().unwrap()),
+            UxnToken::LitAddressAbs(
+                "&sub_label".parse::<LabelRef>().unwrap()),
         ];
 
         for input in inputs.into_iter() {
@@ -885,6 +921,7 @@ mod tests {
             (UxnToken::LitShort(0xabcd), 0x3),
             (UxnToken::LitAddressZeroPage("test_label".parse::<LabelRef>().unwrap()), 0x2),
             (UxnToken::LitAddressRel("test_label".parse::<LabelRef>().unwrap()), 0x2),
+            (UxnToken::LitAddressAbs("test_label".parse::<LabelRef>().unwrap()), 0x3),
             (UxnToken::LabelDefine("test_label".to_owned()), 0x0),
             (UxnToken::SubLabelDefine("test_sub_label".to_owned()), 0x0),
             (UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap()), 0x2),
