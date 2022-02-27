@@ -1,2 +1,2 @@
 ( hello.tal )
-|0100 ,label @label ff ff ff 
+|0100 "hello ff ff "world ff 

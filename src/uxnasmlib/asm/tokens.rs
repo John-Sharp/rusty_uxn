@@ -312,7 +312,7 @@ pub enum UxnToken {
     MacroInvocation(String),
     RawByte(u8),
     RawShort(u16),
-    // RawWord(Vec<u8>),
+    RawWord(Vec<u8>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -380,6 +380,9 @@ impl UxnToken {
             UxnToken::RawShort(s) => {
                 let bytes = s.to_be_bytes();
                 return Ok(vec![bytes[0], bytes[1]]);
+            },
+            UxnToken::RawWord(w) => {
+                return Ok(w.clone());
             },
             UxnToken::LitByte(b) => return Ok(vec![0x80, *b]),
             UxnToken::LitShort(s) => {
@@ -471,6 +474,7 @@ impl UxnToken {
             UxnToken::PadRel(n) => return *n,
             UxnToken::RawByte(_) => return 0x1,
             UxnToken::RawShort(_) => return 0x2,
+            UxnToken::RawWord(w) => return w.len().try_into().unwrap(),
             UxnToken::LitByte(_) => return 0x2,
             UxnToken::LitShort(_) => return 0x3,
             UxnToken::LitAddressZeroPage(_) => return 0x2,
@@ -520,6 +524,26 @@ impl FromStr for UxnToken {
             if let Ok(raw) = u16::from_str_radix(s, 16) {
                 return Ok(UxnToken::RawShort(raw));
             }
+        }
+        
+        if &s[0..1] == "\"" {
+            let sb = (&s[1..]).as_bytes();
+
+            if s.len() < 2 {
+                return Err(ParseError::RuneAbsentArg {
+                    rune: "\"".to_owned(),
+                });
+            }
+
+            if sb.iter().filter(|x| **x > 0x7f).count() > 0 {
+                // not ascii
+                return Err(ParseError::RuneInvalidArg {
+                    rune: "\"".to_owned(),
+                    supplied_arg: s[1..].to_owned(),
+                });
+            }
+
+            return Ok(UxnToken::RawWord(sb.iter().map(|x| *x).collect()));
         }
 
         if &s[0..1] == "|" {
@@ -804,6 +828,10 @@ mod tests {
                 UxnToken::RawAbsAddr("&sub_label2".parse::<LabelRef>().unwrap()),
                 vec![0x00, 0x76],
             ),
+            (
+                UxnToken::RawWord("hello world".as_bytes().iter().copied().collect()),
+                vec![0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64,],
+            ),
         ];
 
         for (token, expected) in inputs.into_iter() {
@@ -917,6 +945,10 @@ mod tests {
             (UxnToken::PadRel(0x1fe), 0x1fe),
             (UxnToken::RawByte(0xfe), 0x1),
             (UxnToken::RawShort(0xabcd), 0x2),
+            (
+                UxnToken::RawWord("hello world".as_bytes().iter().copied().collect()),
+                0xb,
+            ),
             (UxnToken::LitByte(0xab), 0x2),
             (UxnToken::LitShort(0xabcd), 0x3),
             (UxnToken::LitAddressZeroPage("test_label".parse::<LabelRef>().unwrap()), 0x2),
@@ -1081,6 +1113,18 @@ mod tests {
         assert_eq!(output, Ok(expected));
     }
 
+    // test from_str for UxnToken with an input that should be parsed as a raw word 
+    #[test]
+    fn test_from_str_raw_word() {
+        let input = "\"helloWorld";
+        let output = input.parse::<UxnToken>();
+
+        let expected = UxnToken::RawWord(
+            vec![0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x57, 0x6f, 0x72, 0x6c, 0x64,]
+            );
+        assert_eq!(output, Ok(expected));
+    }
+
     // test from_str for UxnToken with an input that should be parsed as a literal address in the
     // zero page
     #[test]
@@ -1140,7 +1184,7 @@ mod tests {
     // argument attached
     #[test]
     fn test_from_str_rune_absent() {
-        let inputs = ["|", "$", "#", "'", "@", ":", ".", ","];
+        let inputs = ["|", "$", "#", "'", "@", ":", ".", ",", "\""];
 
         for input in inputs {
             let output = input.parse::<UxnToken>();
@@ -1156,7 +1200,7 @@ mod tests {
     #[test]
     fn test_from_str_rune_invalid_arg() {
         let inputs = ["|zz", "$uu", "#abcdd",
-        "#ax", "#abxd", "'aa", "'€", ];
+        "#ax", "#abxd", "'aa", "'€", "\"h€lloWorld"];
 
         for input in inputs {
             let output = input.parse::<UxnToken>();
