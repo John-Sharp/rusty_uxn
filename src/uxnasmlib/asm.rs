@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::io::Write;
-use std::io;
-use std::str::FromStr;
-use std::fmt;
 use std::error;
+use std::fmt;
+use std::io;
+use std::io::Write;
+use std::str::FromStr;
 
 pub mod prog_state {
     use std::collections::HashMap;
@@ -16,7 +16,10 @@ pub mod prog_state {
 
     impl Label {
         pub fn new(address: u16) -> Self {
-            Label{address, sub_labels: HashMap::new()}
+            Label {
+                address,
+                sub_labels: HashMap::new(),
+            }
         }
     }
 
@@ -27,8 +30,8 @@ pub mod prog_state {
     }
 }
 
-use prog_state::ProgState;
 use prog_state::Label;
+use prog_state::ProgState;
 
 mod tokens;
 use tokens::UxnToken;
@@ -42,55 +45,95 @@ pub struct Asm {
 pub enum AsmError {
     AbsPaddingRegression,
     ZeroPageWrite,
-    TokenParseError { parse_error: tokens::ParseError },
-    Output { error: io::ErrorKind, msg: String },
-    UndefinedLabel { label_name: String },
-    UndefinedSubLabel { label_name: String, sub_label_name: String },
-    LabelNotInZeroPage { label_name: String },
-    SubLabelNotInZeroPage { label_name: String, sub_label_name: String },
-    SubLabelWithNoLabel { sub_label_name: String},
-    RelLabelNotInRange { label_name: String },
-    RelSubLabelNotInRange { label_name: String, sub_label_name: String },
+    TokenParseError {
+        parse_error: tokens::ParseError,
+    },
+    Output {
+        error: io::ErrorKind,
+        msg: String,
+    },
+    UndefinedLabel {
+        label_name: String,
+    },
+    UndefinedSubLabel {
+        label_name: String,
+        sub_label_name: String,
+    },
+    LabelNotInZeroPage {
+        label_name: String,
+    },
+    SubLabelNotInZeroPage {
+        label_name: String,
+        sub_label_name: String,
+    },
+    SubLabelWithNoLabel {
+        sub_label_name: String,
+    },
+    RelLabelNotInRange {
+        label_name: String,
+    },
+    RelSubLabelNotInRange {
+        label_name: String,
+        sub_label_name: String,
+    },
 }
 
 impl fmt::Display for AsmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AsmError::AbsPaddingRegression => {
-                write!(f, "attempt to pad to absolute program location behind current counter")
-            },
+                write!(
+                    f,
+                    "attempt to pad to absolute program location behind current counter"
+                )
+            }
             AsmError::ZeroPageWrite => {
                 write!(f, "zero page write")
-            },
-            AsmError::TokenParseError{parse_error} => {
+            }
+            AsmError::TokenParseError { parse_error } => {
                 write!(f, "failed to parse token: {}", parse_error)
-            },
-            AsmError::Output{error: _error, msg} => {
+            }
+            AsmError::Output { error: _error, msg } => {
                 write!(f, "output error: {}", msg)
-            },
-            AsmError::UndefinedLabel{label_name} => {
+            }
+            AsmError::UndefinedLabel { label_name } => {
                 write!(f, "undefined label: {}", label_name)
-            },
-            AsmError::UndefinedSubLabel{label_name, sub_label_name} => {
+            }
+            AsmError::UndefinedSubLabel {
+                label_name,
+                sub_label_name,
+            } => {
                 write!(f, "undefined sub-label: {}/{}", label_name, sub_label_name)
-            },
-            AsmError::LabelNotInZeroPage{label_name} => {
+            }
+            AsmError::LabelNotInZeroPage { label_name } => {
                 write!(f, "label not in zero page: {}", label_name)
-            },
-            AsmError::SubLabelNotInZeroPage{label_name, sub_label_name} => {
-                write!(f, "sub-label not in zero page: {}/{}", label_name, sub_label_name)
-            },
-            AsmError::SubLabelWithNoLabel{sub_label_name} => {
-                write!(f, "sub-label defined before label: {}",
-                       sub_label_name)
-            },
-            AsmError::RelLabelNotInRange{label_name} => {
+            }
+            AsmError::SubLabelNotInZeroPage {
+                label_name,
+                sub_label_name,
+            } => {
+                write!(
+                    f,
+                    "sub-label not in zero page: {}/{}",
+                    label_name, sub_label_name
+                )
+            }
+            AsmError::SubLabelWithNoLabel { sub_label_name } => {
+                write!(f, "sub-label defined before label: {}", sub_label_name)
+            }
+            AsmError::RelLabelNotInRange { label_name } => {
                 write!(f, "relative label not in range: {}", label_name)
-            },
-            AsmError::RelSubLabelNotInRange{label_name, sub_label_name} => {
-                write!(f, "relative sub-label not in range: {}/{}",
-                       label_name, sub_label_name)
-            },
+            }
+            AsmError::RelSubLabelNotInRange {
+                label_name,
+                sub_label_name,
+            } => {
+                write!(
+                    f,
+                    "relative sub-label not in range: {}/{}",
+                    label_name, sub_label_name
+                )
+            }
         }
     }
 }
@@ -122,10 +165,11 @@ impl Asm {
         W: Write,
     {
         let mut bytes_encountered = 0usize;
-        let mut prog_state = ProgState{
+        let mut prog_state = ProgState {
             counter: 0,
             labels: &self.labels,
-            current_label: "".to_owned()};
+            current_label: "".to_owned(),
+        };
 
         for i in &self.program {
             prog_state.counter = bytes_encountered.try_into().unwrap();
@@ -137,39 +181,42 @@ impl Asm {
             let next_token_bytes = i.get_bytes(&prog_state);
             let next_token_bytes = match next_token_bytes {
                 Ok(next_token_bytes) => next_token_bytes,
-                Err(tokens::GetBytesError::UndefinedLabel{label_name}) => {
-                    return Err(AsmError::UndefinedLabel{
-                        label_name,
-                    });
-                },
-                Err(tokens::GetBytesError::UndefinedSubLabel{label_name, sub_label_name}) => {
-                    return Err(AsmError::UndefinedSubLabel{
-                        label_name,
-                        sub_label_name,
-                    });
-                },
-                Err(tokens::GetBytesError::LabelNotInZeroPage{label_name}) => {
-                    return Err(AsmError::LabelNotInZeroPage{
-                        label_name,
-                    });
-                },
-                Err(tokens::GetBytesError::SubLabelNotInZeroPage{label_name, sub_label_name}) => {
-                    return Err(AsmError::SubLabelNotInZeroPage{
+                Err(tokens::GetBytesError::UndefinedLabel { label_name }) => {
+                    return Err(AsmError::UndefinedLabel { label_name });
+                }
+                Err(tokens::GetBytesError::UndefinedSubLabel {
+                    label_name,
+                    sub_label_name,
+                }) => {
+                    return Err(AsmError::UndefinedSubLabel {
                         label_name,
                         sub_label_name,
                     });
-                },
-                Err(tokens::GetBytesError::RelLabelNotInRange{label_name}) => {
-                    return Err(AsmError::RelLabelNotInRange{
-                        label_name,
-                    });
-                },
-                Err(tokens::GetBytesError::RelSubLabelNotInRange{label_name, sub_label_name}) => {
-                    return Err(AsmError::RelSubLabelNotInRange{
+                }
+                Err(tokens::GetBytesError::LabelNotInZeroPage { label_name }) => {
+                    return Err(AsmError::LabelNotInZeroPage { label_name });
+                }
+                Err(tokens::GetBytesError::SubLabelNotInZeroPage {
+                    label_name,
+                    sub_label_name,
+                }) => {
+                    return Err(AsmError::SubLabelNotInZeroPage {
                         label_name,
                         sub_label_name,
                     });
-                },
+                }
+                Err(tokens::GetBytesError::RelLabelNotInRange { label_name }) => {
+                    return Err(AsmError::RelLabelNotInRange { label_name });
+                }
+                Err(tokens::GetBytesError::RelSubLabelNotInRange {
+                    label_name,
+                    sub_label_name,
+                }) => {
+                    return Err(AsmError::RelSubLabelNotInRange {
+                        label_name,
+                        sub_label_name,
+                    });
+                }
             };
 
             let bytes_to_write = if bytes_encountered + next_token_bytes.len() < 0x100 {
@@ -184,9 +231,9 @@ impl Asm {
                 if let Err(err) =
                     target.write(&next_token_bytes[(next_token_bytes.len() - bytes_to_write)..])
                 {
-                    return Err(AsmError::Output{
+                    return Err(AsmError::Output {
                         error: err.kind(),
-                        msg: err.to_string()
+                        msg: err.to_string(),
                     });
                 }
             }
@@ -261,16 +308,20 @@ where
                     current_label = Some(label_name.clone());
                     let label = Label::new(prog_loc);
                     labels.insert(label_name.clone(), label);
-                },
+                }
                 UxnToken::SubLabelDefine(ref sub_label_name) => {
                     if let Some(current_label) = &current_label {
-                        labels.get_mut(current_label).unwrap().sub_labels.insert(
-                            sub_label_name.clone(), prog_loc);
+                        labels
+                            .get_mut(current_label)
+                            .unwrap()
+                            .sub_labels
+                            .insert(sub_label_name.clone(), prog_loc);
                     } else {
-                        return Err(AsmError::SubLabelWithNoLabel{
-                            sub_label_name: sub_label_name.clone()});
+                        return Err(AsmError::SubLabelWithNoLabel {
+                            sub_label_name: sub_label_name.clone(),
+                        });
                     }
-                },
+                }
                 _ => {
                     if prog_loc < 0x100 {
                         return Err(AsmError::ZeroPageWrite);
@@ -430,11 +481,15 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label2".parse::<LabelRef>().unwrap(),
+            )),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label".parse::<LabelRef>().unwrap(),
+            )),
         ];
 
         let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
@@ -444,11 +499,15 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label2".parse::<LabelRef>().unwrap(),
+            )),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label".parse::<LabelRef>().unwrap(),
+            )),
         ];
 
         assert_eq!(output, expected_output);
@@ -469,14 +528,18 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label2".parse::<LabelRef>().unwrap(),
+            )),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
             Ok(UxnToken::SubLabelDefine("test_sub_label2".to_owned())),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label".parse::<LabelRef>().unwrap(),
+            )),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
         ];
 
@@ -487,14 +550,18 @@ mod tests {
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::LabelDefine("test_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawAbsAddr("test_label2".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label2".parse::<LabelRef>().unwrap(),
+            )),
             Ok(UxnToken::RawShort(0xbbcc)),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
             Ok(UxnToken::RawByte(0xaa)),
             Ok(UxnToken::SubLabelDefine("test_sub_label2".to_owned())),
             Ok(UxnToken::LabelDefine("test_label2".to_owned())),
             Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap())),
+            Ok(UxnToken::RawAbsAddr(
+                "test_label".parse::<LabelRef>().unwrap(),
+            )),
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
         ];
 
@@ -503,13 +570,22 @@ mod tests {
         let mut expected_labels = HashMap::new();
         expected_labels.insert("test_label".to_owned(), Label::new(0x100));
         expected_labels.insert("test_label2".to_owned(), Label::new(0x106));
-        expected_labels.get_mut("test_label").unwrap().sub_labels.insert(
-            "test_sub_label".to_owned(), 0x105);
-        expected_labels.get_mut("test_label").unwrap().sub_labels.insert(
-            "test_sub_label2".to_owned(), 0x106);
+        expected_labels
+            .get_mut("test_label")
+            .unwrap()
+            .sub_labels
+            .insert("test_sub_label".to_owned(), 0x105);
+        expected_labels
+            .get_mut("test_label")
+            .unwrap()
+            .sub_labels
+            .insert("test_sub_label2".to_owned(), 0x106);
 
-        expected_labels.get_mut("test_label2").unwrap().sub_labels.insert(
-            "test_sub_label".to_owned(), 0x10a);
+        expected_labels
+            .get_mut("test_label2")
+            .unwrap()
+            .sub_labels
+            .insert("test_sub_label".to_owned(), 0x10a);
 
         assert_eq!(labels, expected_labels);
     }
@@ -529,10 +605,13 @@ mod tests {
         let output =
             validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
 
-        assert_eq!(output, Err(AsmError::SubLabelWithNoLabel{
-            sub_label_name: "test_sub_label".to_owned()}));
+        assert_eq!(
+            output,
+            Err(AsmError::SubLabelWithNoLabel {
+                sub_label_name: "test_sub_label".to_owned()
+            })
+        );
     }
-
 
     // test `validate_tokens` function padding regression error;
     // test having two absolute paddings, one padding to before
@@ -597,7 +676,7 @@ mod tests {
     #[test]
     fn test_output_happy() {
         let mut input = Asm {
-            program: vec!(
+            program: vec![
                 UxnToken::PadAbs(0x102),
                 UxnToken::RawByte(0x1),
                 UxnToken::LitShort(0xaabb),
@@ -605,18 +684,14 @@ mod tests {
                 UxnToken::LitByte(0x22),
                 UxnToken::PadRel(0x5),
                 UxnToken::LitByte(0x33),
-            ),
+            ],
             labels: HashMap::new(),
         };
 
-        let expected_output = vec!(
-            0x00, 0x00, 0x1, 0xa0, 0xaa, 0xbb,
-            0x00, 0x00, 0x00,
-            0x80, 0x22,
-            0x00, 0x00, 0x00, 0x00, 0x00,
-            0x80, 0x33
-        );
-
+        let expected_output = vec![
+            0x00, 0x00, 0x1, 0xa0, 0xaa, 0xbb, 0x00, 0x00, 0x00, 0x80, 0x22, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x80, 0x33,
+        ];
 
         let mut output = Vec::new();
         let res = input.output(&mut output);
@@ -628,34 +703,42 @@ mod tests {
     #[test]
     fn test_output_unrecognised_label() {
         let mut input = Asm {
-            program: vec!(
-                UxnToken::RawAbsAddr("unrecognised".parse::<LabelRef>().unwrap()),
-            ),
+            program: vec![UxnToken::RawAbsAddr(
+                "unrecognised".parse::<LabelRef>().unwrap(),
+            )],
             labels: HashMap::new(),
         };
 
         let mut writer = Vec::new();
         let output = input.output(&mut writer);
 
-        assert_eq!(output, Err(AsmError::UndefinedLabel{
-            label_name: "unrecognised".to_owned()}));
+        assert_eq!(
+            output,
+            Err(AsmError::UndefinedLabel {
+                label_name: "unrecognised".to_owned()
+            })
+        );
     }
 
     #[test]
     fn test_output_unrecognised_sub_label() {
         let mut input = Asm {
-            program: vec!(
-                UxnToken::RawAbsAddr("label/unrecognised".parse::<LabelRef>().unwrap()),
-            ),
+            program: vec![UxnToken::RawAbsAddr(
+                "label/unrecognised".parse::<LabelRef>().unwrap(),
+            )],
             labels: HashMap::new(),
         };
 
         let mut writer = Vec::new();
         let output = input.output(&mut writer);
 
-        assert_eq!(output, Err(AsmError::UndefinedSubLabel{
-            label_name: "label".to_owned(),
-            sub_label_name: "unrecognised".to_owned()}));
+        assert_eq!(
+            output,
+            Err(AsmError::UndefinedSubLabel {
+                label_name: "label".to_owned(),
+                sub_label_name: "unrecognised".to_owned()
+            })
+        );
     }
 
     #[test]
@@ -663,39 +746,49 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert("label".to_owned(), Label::new(0x100));
         let mut input = Asm {
-            program: vec!(
-                UxnToken::LitAddressZeroPage("label".parse::<LabelRef>().unwrap()),
-            ),
+            program: vec![UxnToken::LitAddressZeroPage(
+                "label".parse::<LabelRef>().unwrap(),
+            )],
             labels,
         };
 
         let mut writer = Vec::new();
         let output = input.output(&mut writer);
 
-        assert_eq!(output, Err(AsmError::LabelNotInZeroPage{
-            label_name: "label".to_owned(),}));
+        assert_eq!(
+            output,
+            Err(AsmError::LabelNotInZeroPage {
+                label_name: "label".to_owned(),
+            })
+        );
     }
 
     #[test]
     fn test_output_sub_label_not_in_zero_page() {
         let mut labels = HashMap::new();
         labels.insert("label".to_owned(), Label::new(0xfe));
-        labels.get_mut("label").unwrap()
-            .sub_labels.insert("sub_label".to_owned(), 0x101);
+        labels
+            .get_mut("label")
+            .unwrap()
+            .sub_labels
+            .insert("sub_label".to_owned(), 0x101);
         let mut input = Asm {
-            program: vec!(
-                UxnToken::LitAddressZeroPage("label/sub_label".parse::<LabelRef>().unwrap()),
-            ),
+            program: vec![UxnToken::LitAddressZeroPage(
+                "label/sub_label".parse::<LabelRef>().unwrap(),
+            )],
             labels,
         };
 
         let mut writer = Vec::new();
         let output = input.output(&mut writer);
 
-        assert_eq!(output, Err(AsmError::SubLabelNotInZeroPage{
-            label_name: "label".to_owned(),
-            sub_label_name: "sub_label".to_owned(),
-        }));
+        assert_eq!(
+            output,
+            Err(AsmError::SubLabelNotInZeroPage {
+                label_name: "label".to_owned(),
+                sub_label_name: "sub_label".to_owned(),
+            })
+        );
     }
 
     #[test]
@@ -704,38 +797,49 @@ mod tests {
         labels.insert("label".to_owned(), Label::new(0xffff));
 
         let mut input = Asm {
-            program: vec!(
-                UxnToken::LitAddressRel("label".parse::<LabelRef>().unwrap()),
-            ),
+            program: vec![UxnToken::LitAddressRel(
+                "label".parse::<LabelRef>().unwrap(),
+            )],
             labels,
         };
 
         let mut writer = Vec::new();
         let output = input.output(&mut writer);
 
-        assert_eq!(output, Err(AsmError::RelLabelNotInRange{
-            label_name: "label".to_owned(),}));
+        assert_eq!(
+            output,
+            Err(AsmError::RelLabelNotInRange {
+                label_name: "label".to_owned(),
+            })
+        );
     }
 
     #[test]
     fn test_output_sub_label_not_in_range() {
         let mut labels = HashMap::new();
         labels.insert("label".to_owned(), Label::new(0xfffc));
-        labels.get_mut("label").unwrap()
-            .sub_labels.insert("sub_label".to_owned(), 0xfffd);
+        labels
+            .get_mut("label")
+            .unwrap()
+            .sub_labels
+            .insert("sub_label".to_owned(), 0xfffd);
 
         let mut input = Asm {
-            program: vec!(
-                UxnToken::LitAddressRel("label/sub_label".parse::<LabelRef>().unwrap()),
-            ),
+            program: vec![UxnToken::LitAddressRel(
+                "label/sub_label".parse::<LabelRef>().unwrap(),
+            )],
             labels,
         };
 
         let mut writer = Vec::new();
         let output = input.output(&mut writer);
 
-        assert_eq!(output, Err(AsmError::RelSubLabelNotInRange{
-            label_name: "label".to_owned(),
-            sub_label_name: "sub_label".to_owned()}));
+        assert_eq!(
+            output,
+            Err(AsmError::RelSubLabelNotInRange {
+                label_name: "label".to_owned(),
+                sub_label_name: "sub_label".to_owned()
+            })
+        );
     }
 }
