@@ -753,8 +753,8 @@ impl FromStr for UxnToken {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use crate::uxnasmlib::asm::prog_state::Label;
+    use std::collections::HashMap;
 
     // test `from_str()` for `LabelRef`; test that each type of label
     // can be correctly parsed

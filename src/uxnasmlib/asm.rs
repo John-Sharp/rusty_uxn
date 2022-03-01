@@ -158,23 +158,11 @@ impl fmt::Display for AsmError {
                     inner_macro_name, outer_macro_name
                 )
             }
-            AsmError::DoubleMacroDefine {
-                macro_name,
-            } => {
-                write!(
-                    f,
-                    "macro '{}' defined twice",
-                    macro_name
-                )
+            AsmError::DoubleMacroDefine { macro_name } => {
+                write!(f, "macro '{}' defined twice", macro_name)
             }
-            AsmError::MalformedMacroDefine {
-                macro_name,
-            } => {
-                write!(
-                    f,
-                    "macro '{}' incorrectly defined",
-                    macro_name
-                )
+            AsmError::MalformedMacroDefine { macro_name } => {
+                write!(f, "macro '{}' incorrectly defined", macro_name)
             }
             AsmError::MacroStartDelimiterMisplaced => {
                 write!(f, "misplaced '{{'")
@@ -339,9 +327,7 @@ where
     StringIter { inner_iter: x }
 }
 
-fn validate_tokens<I>(
-    input: I,
-) -> impl Iterator<Item = Result<UxnToken, AsmError>>
+fn validate_tokens<I>(input: I) -> impl Iterator<Item = Result<UxnToken, AsmError>>
 where
     I: Iterator<Item = Result<UxnToken, tokens::ParseError>>,
 {
@@ -353,11 +339,9 @@ where
     })
 }
 
-fn verify_no_zero_page_write<I>(
-    input: I,
-) -> impl Iterator<Item = Result<UxnToken, AsmError>>
+fn verify_no_zero_page_write<I>(input: I) -> impl Iterator<Item = Result<UxnToken, AsmError>>
 where
-    I: Iterator<Item = Result<UxnToken, AsmError>>
+    I: Iterator<Item = Result<UxnToken, AsmError>>,
 {
     let mut prog_loc = 0u16;
 
@@ -427,9 +411,7 @@ where
             prog_loc += t.num_bytes(prog_loc);
             Ok(t)
         }
-        Err(e) => {
-            Err(e)
-        }
+        Err(e) => Err(e),
     })
 }
 
@@ -539,8 +521,7 @@ mod tests {
             }),
         ];
 
-        let output =
-            validate_tokens(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
+        let output = validate_tokens(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
 
         assert_eq!(
             output,
