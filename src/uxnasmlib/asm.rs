@@ -4,6 +4,7 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 use std::str::FromStr;
+use std::mem;
 
 pub mod prog_state {
     use std::collections::HashMap;
@@ -76,6 +77,18 @@ pub enum AsmError {
         label_name: String,
         sub_label_name: String,
     },
+    MacroDefineWithinMacro {
+        outer_macro_name: String,
+        inner_macro_name: String,
+    },
+    DoubleMacroDefine {
+        macro_name: String,
+    },
+    MalformedMacroDefine {
+        macro_name: String,
+    },
+    MacroStartDelimiterMisplaced,
+    MacroEndDelimiterMisplaced,
 }
 
 impl fmt::Display for AsmError {
@@ -134,6 +147,40 @@ impl fmt::Display for AsmError {
                     label_name, sub_label_name
                 )
             }
+            AsmError::MacroDefineWithinMacro {
+                inner_macro_name,
+                outer_macro_name,
+            } => {
+                write!(
+                    f,
+                    "macro ('{}') defined within macro '{}'",
+                    inner_macro_name, outer_macro_name
+                )
+            }
+            AsmError::DoubleMacroDefine {
+                macro_name,
+            } => {
+                write!(
+                    f,
+                    "macro '{}' defined twice",
+                    macro_name
+                )
+            }
+            AsmError::MalformedMacroDefine {
+                macro_name,
+            } => {
+                write!(
+                    f,
+                    "macro '{}' incorrectly defined",
+                    macro_name
+                )
+            }
+            AsmError::MacroStartDelimiterMisplaced => {
+                write!(f, "misplaced '{{'")
+            }
+            AsmError::MacroEndDelimiterMisplaced => {
+                write!(f, "misplaced '}}'")
+            }
         }
     }
 }
@@ -151,11 +198,21 @@ impl Asm {
 
         let tokens = token_strings.map(|t| t.parse::<UxnToken>());
 
+        // convert token stream error tokens::ParseError type into AsmError
+        let tokens = validate_tokens(tokens);
+
+        // strip macro definitions, expand macro invocations
+        let tokens = process_macros(tokens);
+
+        // look for writing to zero page errors
+        let tokens = verify_no_zero_page_write(tokens);
+
+        // populate labels map
         let mut labels = HashMap::new();
+        let tokens = get_labels(tokens, &mut labels);
 
-        let validated_tokens = validate_tokens(tokens, &mut labels);
-
-        let program = validated_tokens.collect::<Result<Vec<_>, AsmError>>()?;
+        // collect, returning first error encountered
+        let program = tokens.collect::<Result<Vec<_>, AsmError>>()?;
 
         return Ok(Asm { labels, program });
     }
@@ -281,17 +338,135 @@ where
     StringIter { inner_iter: x }
 }
 
-fn validate_tokens<'a, I: 'a>(
+fn validate_tokens<I>(
     input: I,
-    labels: &'a mut HashMap<String, Label>,
-) -> impl Iterator<Item = Result<UxnToken, AsmError>> + 'a
+) -> impl Iterator<Item = Result<UxnToken, AsmError>>
 where
     I: Iterator<Item = Result<UxnToken, tokens::ParseError>>,
 {
+    input.map(|t| match t {
+        Ok(t) => Ok(t),
+        Err(e) => {
+            return Err(AsmError::TokenParseError { parse_error: e });
+        }
+    })
+}
+
+enum MacroState {
+    MainBody,
+    MacroDefinitionHead{macro_name: String},
+    MacroDefinitionBody{macro_name: String, macro_body: Vec<UxnToken>},
+}
+
+// strips macro definitions out of token stream, and expands
+// macro invocations
+fn process_macros<I>(
+    input: I,
+) -> impl Iterator<Item = Result<UxnToken, AsmError>>
+where
+    I: Iterator<Item = Result<UxnToken, AsmError>>
+{
+    let mut macros = HashMap::new();
+    let mut state = MacroState::MainBody;
+
+    input.filter_map(move |t| match t {
+        Err(e) => Some(Err(e)),
+        Ok(UxnToken::MacroDefine(ref macro_name)) => {
+            match state {
+                MacroState::MainBody => {
+                    if macros.contains_key(macro_name) {
+                        return Some(Err(AsmError::DoubleMacroDefine {
+                            macro_name: macro_name.clone(),
+                        }));
+                    }
+
+                    state = MacroState::MacroDefinitionHead{macro_name: macro_name.clone()};
+                    return None;
+                }
+                MacroState::MacroDefinitionHead{macro_name: ref _m} => {
+                    let macro_name = macro_name.clone();
+                    return Some(Err(AsmError::MalformedMacroDefine{
+                        macro_name
+                    }));
+                }
+                MacroState::MacroDefinitionBody{macro_name: ref outer_macro_name, macro_body: ref _b} => {
+                    let inner_macro_name = macro_name.clone();
+                    let outer_macro_name = outer_macro_name.clone();
+                    return Some(Err(AsmError::MacroDefineWithinMacro{
+                        outer_macro_name, inner_macro_name
+                    }));
+                }
+            }
+        }
+        Ok(UxnToken::MacroStartDelimiter) => {
+            match state {
+                MacroState::MainBody => {
+                    return Some(Err(AsmError::MacroStartDelimiterMisplaced));
+                }
+                MacroState::MacroDefinitionHead{ref macro_name} => {
+                    state = MacroState::MacroDefinitionBody{
+                        macro_name: macro_name.clone(),
+                        macro_body: Vec::new()};
+                    return None;
+                }
+                MacroState::MacroDefinitionBody{macro_name: ref _name, macro_body: ref _body} => {
+                    return Some(Err(AsmError::MacroStartDelimiterMisplaced));
+                }
+            }
+        }
+        Ok(UxnToken::MacroEndDelimiter) => {
+            match state {
+                MacroState::MainBody => {
+                    return Some(Err(AsmError::MacroEndDelimiterMisplaced));
+                }
+                MacroState::MacroDefinitionHead{macro_name: _} => {
+                    return Some(Err(AsmError::MacroEndDelimiterMisplaced));
+                }
+                MacroState::MacroDefinitionBody{macro_name: _, macro_body: _} => {
+                    let old_state = mem::replace(&mut state, MacroState::MainBody);
+                    if let MacroState::MacroDefinitionBody{macro_name, macro_body} = old_state {
+                        macros.insert(
+                            macro_name.clone(),
+                            macro_body
+                            );
+                    }
+
+                    return None;
+                }
+            }
+        }
+        // TODO macro invocations
+        Ok(t) => {
+            match state {
+                MacroState::MainBody => {
+                    return Some(Ok(t));
+                }
+                MacroState::MacroDefinitionHead{ref macro_name} => {
+                    return Some(Err(AsmError::MalformedMacroDefine{
+                        macro_name: macro_name.clone(),
+                    }));
+                }
+                MacroState::MacroDefinitionBody{macro_name: _, ref mut macro_body} => {
+                    macro_body.push(t);
+                    return None;
+                }
+            }
+        }
+    })
+}
+
+fn verify_no_zero_page_write<I>(
+    input: I,
+) -> impl Iterator<Item = Result<UxnToken, AsmError>>
+where
+    I: Iterator<Item = Result<UxnToken, AsmError>>
+{
     let mut prog_loc = 0u16;
-    let mut current_label = None;
 
     input.map(move |t| match t {
+        Err(e) => {
+            return Err(e);
+        }
         Ok(t) => {
             match t {
                 UxnToken::PadAbs(n) => {
@@ -304,37 +479,58 @@ where
                 UxnToken::PadRel(_) => {
                     prog_loc += t.num_bytes(prog_loc);
                 }
-                UxnToken::LabelDefine(ref label_name) => {
-                    current_label = Some(label_name.clone());
-                    let label = Label::new(prog_loc);
-                    labels.insert(label_name.clone(), label);
-                }
-                UxnToken::SubLabelDefine(ref sub_label_name) => {
-                    if let Some(current_label) = &current_label {
-                        labels
-                            .get_mut(current_label)
-                            .unwrap()
-                            .sub_labels
-                            .insert(sub_label_name.clone(), prog_loc);
-                    } else {
-                        return Err(AsmError::SubLabelWithNoLabel {
-                            sub_label_name: sub_label_name.clone(),
-                        });
-                    }
-                }
                 _ => {
-                    if prog_loc < 0x100 {
+                    let num_bytes = t.num_bytes(prog_loc);
+
+                    if num_bytes > 0 && prog_loc < 0x100 {
                         return Err(AsmError::ZeroPageWrite);
                     }
 
-                    prog_loc += t.num_bytes(prog_loc);
+                    prog_loc += num_bytes;
                 }
-            };
-
+            }
             return Ok(t);
         }
+    })
+}
+
+fn get_labels<'a, I: 'a>(
+    input: I,
+    labels: &'a mut HashMap<String, Label>,
+) -> impl Iterator<Item = Result<UxnToken, AsmError>> + 'a
+where
+    I: Iterator<Item = Result<UxnToken, AsmError>>,
+{
+    let mut current_label = None;
+    let mut prog_loc = 0u16;
+
+    input.map(move |t| match t {
+        Ok(UxnToken::LabelDefine(ref label_name)) => {
+            current_label = Some(label_name.clone());
+            let label = Label::new(prog_loc);
+            labels.insert(label_name.clone(), label);
+            t
+        }
+        Ok(UxnToken::SubLabelDefine(ref sub_label_name)) => {
+            if let Some(current_label) = &current_label {
+                labels
+                    .get_mut(current_label)
+                    .unwrap()
+                    .sub_labels
+                    .insert(sub_label_name.clone(), prog_loc);
+            } else {
+                return Err(AsmError::SubLabelWithNoLabel {
+                    sub_label_name: sub_label_name.clone(),
+                });
+            }
+            t
+        }
+        Ok(t) => {
+            prog_loc += t.num_bytes(prog_loc);
+            Ok(t)
+        }
         Err(e) => {
-            return Err(AsmError::TokenParseError { parse_error: e });
+            Err(e)
         }
     })
 }
@@ -413,7 +609,6 @@ mod tests {
     // runs
     #[test]
     fn test_validate_tokens_happy() {
-        let mut labels = HashMap::new();
         let input = vec![
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::RawByte(0xff)),
@@ -421,7 +616,7 @@ mod tests {
             Ok(UxnToken::RawShort(0xbbcc)),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
+        let output = validate_tokens(input.into_iter()).collect::<Vec<_>>();
 
         let expected_output: Vec<Result<UxnToken, AsmError>>;
         expected_output = vec![
@@ -432,18 +627,39 @@ mod tests {
         ];
 
         assert_eq!(output, expected_output);
-
-        let expected_labels = HashMap::new();
-        assert_eq!(labels, expected_labels);
     }
 
-    // test `validate_tokens` function, with multiple paddings;
+    // test `validate_tokens` function token parse error;
+    // test that a parse error in the input stream is correctly
+    // propagated as a AsmError::TokenParseError
+    #[test]
+    fn test_validate_tokens_token_parse_error() {
+        let input = vec![
+            Ok(UxnToken::PadAbs(0xff)),
+            Err(tokens::ParseError::RuneAbsentArg {
+                rune: "|".to_owned(),
+            }),
+        ];
+
+        let output =
+            validate_tokens(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
+
+        assert_eq!(
+            output,
+            Err(AsmError::TokenParseError {
+                parse_error: tokens::ParseError::RuneAbsentArg {
+                    rune: "|".to_owned()
+                },
+            })
+        );
+    }
+
+    // test `verify_no_zero_page_write` function, with multiple paddings;
     // test multiple paddings
     // (both relative and absolue) and
     // assert that function successfully runs
     #[test]
-    fn test_validate_tokens_happy_multi_padding() {
-        let mut labels = HashMap::new();
+    fn test_verify_no_zero_page_write_happy_multi_padding() {
         let input = vec![
             Ok(UxnToken::PadRel(0x80)),
             Ok(UxnToken::PadAbs(0xc0)),
@@ -453,7 +669,7 @@ mod tests {
             Ok(UxnToken::RawShort(0xbbcc)),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
+        let output = verify_no_zero_page_write(input.into_iter()).collect::<Vec<_>>();
 
         let expected_output: Vec<Result<UxnToken, AsmError>>;
         expected_output = vec![
@@ -466,16 +682,45 @@ mod tests {
         ];
 
         assert_eq!(output, expected_output);
-
-        let expected_labels = HashMap::new();
-        assert_eq!(labels, expected_labels);
     }
 
-    // test `validate_tokens` function with labels; test having
+    // test `verify_no_zero_page_write` function padding regression error;
+    // test having two absolute paddings, one padding to before
+    // current program location. Assert the correct error is
+    // received
+    #[test]
+    fn test_verify_no_zero_page_write_padding_regression() {
+        let input = vec![
+            Ok(UxnToken::PadAbs(0x100)),
+            Ok(UxnToken::RawByte(0xaa)),
+            Ok(UxnToken::RawShort(0xbbcc)),
+            Ok(UxnToken::PadAbs(0x101)),
+        ];
+
+        let output =
+            verify_no_zero_page_write(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
+
+        assert_eq!(output, Err(AsmError::AbsPaddingRegression));
+    }
+
+    // test `verify_no_zero_page_write` function zero page write error;
+    // test that attempting to write to the zero page results
+    // in the correct error
+    #[test]
+    fn test_verify_no_zero_page_write_zero_page_write() {
+        let input = vec![Ok(UxnToken::PadAbs(0xff)), Ok(UxnToken::RawByte(0xaa))];
+
+        let output =
+            verify_no_zero_page_write(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
+
+        assert_eq!(output, Err(AsmError::ZeroPageWrite));
+    }
+
+    // test `get_labels` function; test having
     // labels in the token stream and check their location
     // is stored as expected in a hash map
     #[test]
-    fn test_validate_tokens_happy_label() {
+    fn test_get_labels_happy() {
         let mut labels = HashMap::new();
         let input = vec![
             Ok(UxnToken::PadAbs(0x100)),
@@ -492,7 +737,7 @@ mod tests {
             )),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
+        let output = get_labels(input.into_iter(), &mut labels).collect::<Vec<_>>();
 
         let expected_output: Vec<Result<UxnToken, AsmError>>;
         expected_output = vec![
@@ -518,11 +763,11 @@ mod tests {
         assert_eq!(labels, expected_labels);
     }
 
-    // test `validate_tokens` function with sub-labels; test having
+    // test `get_labels` function with sub-labels; test having
     // sub-labels in the token stream and check their location
     // is stored as expected in a hash map
     #[test]
-    fn test_validate_tokens_happy_sub_label() {
+    fn test_get_labels_happy_sub_label() {
         let mut labels = HashMap::new();
         let input = vec![
             Ok(UxnToken::PadAbs(0x100)),
@@ -543,7 +788,7 @@ mod tests {
             Ok(UxnToken::SubLabelDefine("test_sub_label".to_owned())),
         ];
 
-        let output = validate_tokens(input.into_iter(), &mut labels).collect::<Vec<_>>();
+        let output = get_labels(input.into_iter(), &mut labels).collect::<Vec<_>>();
 
         let expected_output: Vec<Result<UxnToken, AsmError>>;
         expected_output = vec![
@@ -590,11 +835,11 @@ mod tests {
         assert_eq!(labels, expected_labels);
     }
 
-    // test `validate_tokens` function sub-labels without labels error;
+    // test `get_labels` function sub-labels without labels error;
     // test having a sub-label in the token stream before any label
     // is defined and check the correct error is returned
     #[test]
-    fn test_validate_tokens_sub_label_without_label() {
+    fn test_get_labels_sub_label_without_label() {
         let mut labels = HashMap::new();
 
         let input = vec![
@@ -603,72 +848,12 @@ mod tests {
         ];
 
         let output =
-            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
+            get_labels(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
 
         assert_eq!(
             output,
             Err(AsmError::SubLabelWithNoLabel {
                 sub_label_name: "test_sub_label".to_owned()
-            })
-        );
-    }
-
-    // test `validate_tokens` function padding regression error;
-    // test having two absolute paddings, one padding to before
-    // current program location. Assert the correct error is
-    // received
-    #[test]
-    fn test_validate_tokens_padding_regression() {
-        let mut labels = HashMap::new();
-        let input = vec![
-            Ok(UxnToken::PadAbs(0x100)),
-            Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::PadAbs(0x101)),
-        ];
-
-        let output =
-            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
-
-        assert_eq!(output, Err(AsmError::AbsPaddingRegression));
-    }
-
-    // test `validate_tokens` function zero page write error;
-    // test that attempting to write to the zero page results
-    // in the correct error
-    #[test]
-    fn test_validate_tokens_zero_page_write() {
-        let mut labels = HashMap::new();
-        let input = vec![Ok(UxnToken::PadAbs(0xff)), Ok(UxnToken::RawByte(0xaa))];
-
-        let output =
-            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
-
-        assert_eq!(output, Err(AsmError::ZeroPageWrite));
-    }
-
-    // test `validate_tokens` function token parse error;
-    // test that a parse error in the input stream is correctly
-    // propagated as a AsmError::TokenParseError
-    #[test]
-    fn test_validate_tokens_token_parse_error() {
-        let mut labels = HashMap::new();
-        let input = vec![
-            Ok(UxnToken::PadAbs(0xff)),
-            Err(tokens::ParseError::RuneAbsentArg {
-                rune: "|".to_owned(),
-            }),
-        ];
-
-        let output =
-            validate_tokens(input.into_iter(), &mut labels).collect::<Result<Vec<_>, AsmError>>();
-
-        assert_eq!(
-            output,
-            Err(AsmError::TokenParseError {
-                parse_error: tokens::ParseError::RuneAbsentArg {
-                    rune: "|".to_owned()
-                },
             })
         );
     }

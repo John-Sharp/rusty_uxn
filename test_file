@@ -1,2 +1,6 @@
 ( hello.tal )
-|0100 "hello ff ff "world ff 
+
+%macro1 aa { bb { cc dd }
+
+|0100 macro1 ff
+

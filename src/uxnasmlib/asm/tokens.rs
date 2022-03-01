@@ -1,4 +1,3 @@
-use crate::uxnasmlib::asm::prog_state::Label;
 use crate::uxnasmlib::asm::prog_state::ProgState;
 use std::fmt;
 use std::str::FromStr;
@@ -297,7 +296,9 @@ impl FromStr for LabelRef {
 #[derive(Debug, PartialEq)]
 pub enum UxnToken {
     Op(OpObject),
-    // MacroDefine,
+    MacroDefine(String),
+    MacroStartDelimiter,
+    MacroEndDelimiter,
     PadAbs(u16),
     PadRel(u16),
     LabelDefine(String),
@@ -390,6 +391,9 @@ impl UxnToken {
     pub fn get_bytes(&self, prog_state: &ProgState) -> Result<Vec<u8>, GetBytesError> {
         match self {
             UxnToken::Op(o) => return Ok(o.get_bytes()),
+            UxnToken::MacroDefine(_) => return Ok(vec![]),
+            UxnToken::MacroStartDelimiter => return Ok(vec![]),
+            UxnToken::MacroEndDelimiter => return Ok(vec![]),
             UxnToken::MacroInvocation(_) => return Ok(vec![0xaa, 0xbb]),
             UxnToken::PadAbs(n) => {
                 let bytes_to_write = *n - prog_state.counter;
@@ -496,6 +500,9 @@ impl UxnToken {
     pub fn num_bytes(&self, prog_counter: u16) -> u16 {
         match self {
             UxnToken::Op(_) => return 0x1,
+            UxnToken::MacroDefine(_) => return 0x0,
+            UxnToken::MacroStartDelimiter => return 0x0,
+            UxnToken::MacroEndDelimiter => return 0x0,
             UxnToken::MacroInvocation(_) => return 0xff,
             UxnToken::PadAbs(n) => return *n - prog_counter,
             UxnToken::PadRel(n) => return *n,
@@ -747,6 +754,7 @@ impl FromStr for UxnToken {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use crate::uxnasmlib::asm::prog_state::Label;
 
     // test `from_str()` for `LabelRef`; test that each type of label
     // can be correctly parsed
