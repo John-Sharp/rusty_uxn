@@ -90,6 +90,12 @@ pub enum AsmError {
     },
     MacroStartDelimiterMisplaced,
     MacroEndDelimiterMisplaced,
+    UnrecognisedMacro {
+        macro_name: String,
+    },
+    MaxMacroCallDepthExceeded {
+        macro_name: String,
+    },
 }
 
 impl fmt::Display for AsmError {
@@ -169,6 +175,13 @@ impl fmt::Display for AsmError {
             }
             AsmError::MacroEndDelimiterMisplaced => {
                 write!(f, "misplaced '}}'")
+            }
+            AsmError::UnrecognisedMacro { macro_name } => {
+                write!(f, "undefined macro '{}'", macro_name)
+            }
+            AsmError::MaxMacroCallDepthExceeded { macro_name } => {
+                write!(f, "too many nested macro calls for call to '{}'",
+                       macro_name)
             }
         }
     }

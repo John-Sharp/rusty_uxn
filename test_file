@@ -1,6 +1,8 @@
 ( hello.tal )
 
-%macro1 aa { bb { cc dd }
+%macro1 { bb macro2 }
+
+%macro2 { cc macro1 }
 
 |0100 macro1 ff
 

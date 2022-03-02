@@ -5,13 +5,13 @@ use std::str::FromStr;
 pub mod ops {
     use std::str::FromStr;
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     pub enum OpCode {
         Brk,
         Deo,
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     pub struct OpObject {
         keep: bool,
         ret: bool,
@@ -249,7 +249,7 @@ pub mod ops {
 
 use ops::OpObject;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum LabelRef {
     Label {
         label_name: String,
@@ -293,7 +293,7 @@ impl FromStr for LabelRef {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum UxnToken {
     Op(OpObject),
     MacroDefine(String),
