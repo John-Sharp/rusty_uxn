@@ -394,7 +394,7 @@ impl UxnToken {
             UxnToken::MacroDefine(_) => return Ok(vec![]),
             UxnToken::MacroStartDelimiter => return Ok(vec![]),
             UxnToken::MacroEndDelimiter => return Ok(vec![]),
-            UxnToken::MacroInvocation(_) => return Ok(vec![0xaa, 0xbb]),
+            UxnToken::MacroInvocation(_) => return Ok(vec![]),
             UxnToken::PadAbs(n) => {
                 let bytes_to_write = *n - prog_state.counter;
 
@@ -503,7 +503,7 @@ impl UxnToken {
             UxnToken::MacroDefine(_) => return 0x0,
             UxnToken::MacroStartDelimiter => return 0x0,
             UxnToken::MacroEndDelimiter => return 0x0,
-            UxnToken::MacroInvocation(_) => return 0xff,
+            UxnToken::MacroInvocation(_) => return 0x0,
             UxnToken::PadAbs(n) => return *n - prog_counter,
             UxnToken::PadRel(n) => return *n,
             UxnToken::RawByte(_) => return 0x1,
@@ -558,6 +558,24 @@ impl FromStr for UxnToken {
             if let Ok(raw) = u16::from_str_radix(s, 16) {
                 return Ok(UxnToken::RawShort(raw));
             }
+        }
+
+        if &s[0..1] == "%" {
+            if s.len() < 2 {
+                return Err(ParseError::RuneAbsentArg {
+                    rune: "%".to_owned(),
+                });
+            }
+
+            return Ok(UxnToken::MacroDefine((&s[1..]).to_owned()));
+        }
+
+        if s == "{" {
+            return Ok(UxnToken::MacroStartDelimiter);
+        }
+
+        if s == "}" {
+            return Ok(UxnToken::MacroEndDelimiter);
         }
 
         if &s[0..1] == "\"" {
@@ -824,10 +842,21 @@ mod tests {
                 UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
                 vec![0x17],
             ),
-            // TODO
+            (
+                UxnToken::MacroDefine("test_macro".to_owned()),
+                vec![],
+            ),
+            (
+                UxnToken::MacroStartDelimiter,
+                vec![],
+            ),
+            (
+                UxnToken::MacroEndDelimiter,
+                vec![],
+            ),
             (
                 UxnToken::MacroInvocation("test_macro".to_owned()),
-                vec![0xaa, 0xbb],
+                vec![],
             ),
             (UxnToken::PadAbs(0x100), vec![0x00; 0x100]),
             (UxnToken::PadRel(0x80), vec![0x00; 0x80]),
@@ -1010,8 +1039,10 @@ mod tests {
 
         let inputs = [
             (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()), 0x1),
-            // TODO
-            (UxnToken::MacroInvocation("blah".to_owned()), 0xff),
+            (UxnToken::MacroDefine("blah".to_owned()), 0x00),
+            (UxnToken::MacroStartDelimiter, 0x00),
+            (UxnToken::MacroEndDelimiter, 0x00),
+            (UxnToken::MacroInvocation("blah".to_owned()), 0x00),
             (UxnToken::PadAbs(0x1ff), 0x1ff),
             (UxnToken::PadRel(0x1fe), 0x1fe),
             (UxnToken::RawByte(0xfe), 0x1),
@@ -1167,6 +1198,42 @@ mod tests {
         let input = "ab";
         let output = input.parse::<UxnToken>();
         let expected = UxnToken::RawByte(0xab);
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a macro define
+    #[test]
+    fn test_from_str_macro_define() {
+        let input = "%test_macro";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::MacroDefine("test_macro".to_owned());
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a macro start delimiter
+    #[test]
+    fn test_from_str_macro_start_delimiter() {
+        let input = "{";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::MacroStartDelimiter;
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a macro end delimiter
+    #[test]
+    fn test_from_str_macro_end_delimiter() {
+        let input = "}";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::MacroEndDelimiter;
+        assert_eq!(output, Ok(expected));
+    }
+
+    // test from_str for UxnToken with an input that should be parsed as a macro invocation
+    #[test]
+    fn test_from_str_macro_invocation() {
+        let input = "test_macro";
+        let output = input.parse::<UxnToken>();
+        let expected = UxnToken::MacroInvocation("test_macro".to_string());
         assert_eq!(output, Ok(expected));
     }
 
