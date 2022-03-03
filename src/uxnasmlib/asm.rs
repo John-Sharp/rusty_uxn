@@ -332,6 +332,9 @@ where
         let l = l.replace("(", " ( ");
         let l = l.replace(")", " ) ");
 
+        let l = l.replace("[", " [ ");
+        let l = l.replace("]", " ] ");
+
         l.split_whitespace()
             .map(|w| String::from_str(w).unwrap())
             .collect::<Vec<_>>()
@@ -445,6 +448,12 @@ where
         if was_in_comment {
             return None;
         }
+        if s == "[" {
+            return None;
+        }
+        if s == "]" {
+            return None;
+        }
         return Some(s);
     });
 
@@ -464,12 +473,14 @@ mod tests {
         let input = vec![
             "tokenA tokenB tokenC{tokenD".to_owned(),
             "}tokenE               (tokenF            tokenG".to_owned(),
+            "tokenH[tokenI]tokenJ [tokenK".to_owned(),
         ];
 
         assert_eq!(
             split_to_token_strings(input.into_iter()).collect::<Vec<_>>(),
             vec!(
-                "tokenA", "tokenB", "tokenC", "{", "tokenD", "}", "tokenE", "(", "tokenF", "tokenG"
+                "tokenA", "tokenB", "tokenC", "{", "tokenD", "}", "tokenE", "(", "tokenF", "tokenG",
+                "tokenH", "[", "tokenI", "]", "tokenJ", "[", "tokenK",
             )
             .into_iter()
             .map(|t| t.to_owned())
