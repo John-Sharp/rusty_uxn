@@ -3,6 +3,8 @@ use std::error;
 use std::fmt;
 use std::io;
 use std::io::Write;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::str::FromStr;
 
 pub mod prog_state {
@@ -206,9 +208,6 @@ impl Asm {
         // strip macro definitions, expand macro invocations
         let tokens = macros::process_macros(tokens);
 
-        // look for writing to zero page errors
-        let tokens = verify_no_zero_page_write(tokens);
-
         // populate labels map
         let mut labels = HashMap::new();
         let tokens = get_labels(tokens, &mut labels);
@@ -221,27 +220,87 @@ impl Asm {
 
     pub fn output<W>(&mut self, mut target: W) -> Result<(), AsmError>
     where
-        W: Write,
+        W: Write + Seek,
     {
-        let mut bytes_encountered = 0usize;
         let mut prog_state = ProgState {
             counter: 0,
             labels: &self.labels,
             current_label: "".to_owned(),
         };
+        let mut high_water_mark = 0u16;
 
-        for i in &self.program {
-            prog_state.counter = bytes_encountered.try_into().unwrap();
+        for token in &self.program {
 
-            if let UxnToken::LabelDefine(label_name) = i {
+            if let UxnToken::LabelDefine(label_name) = token {
                 prog_state.current_label = label_name.clone();
+                continue;
             }
 
-            let next_token_bytes = i.get_bytes(&prog_state);
-            let next_token_bytes = match next_token_bytes {
-                Ok(next_token_bytes) => next_token_bytes,
-                Err(tokens::GetBytesError::UndefinedLabel { label_name }) => {
-                    return Err(AsmError::UndefinedLabel { label_name });
+            match token.get_bytes(&prog_state) {
+                Ok(bytes) => {
+
+                    // check for zero page write
+                    if prog_state.counter < 0x100 {
+                        return Err(AsmError::ZeroPageWrite);
+                    }
+
+                    if prog_state.counter > high_water_mark {
+                        // we are writing to a location in the program beyond
+                        // which we have previously written, fill the bytes that
+                        // have not been written yet with zeros
+
+                        if let Err(err) = target.seek(SeekFrom::End(0)) {
+                            return Err(AsmError::Output {
+                                error: err.kind(),
+                                msg: err.to_string(),
+                            });
+                        }
+
+                        if let Err(err) = 
+                        target.write(
+                            &vec![0x00; (prog_state.counter - high_water_mark).into()])
+                        {
+                            return Err(AsmError::Output {
+                                error: err.kind(),
+                                msg: err.to_string(),
+                            });
+                        }
+                    } else {
+                        // the program counter is pointing to a part of the 
+                        // 'target' that has already been written to, seek to
+                        // that location
+                        if let Err(err) = target.seek(SeekFrom::Start((prog_state.counter - 0x100).into())) {
+                            return Err(AsmError::Output {
+                                error: err.kind(),
+                                msg: err.to_string(),
+                            });
+                        }
+                    }
+
+                    // at this point the 'target' file/buffer is guaranteed
+                    // to be at the location we want to write the bytes corresponding
+                    // to the current token, so write
+                    if let Err(err) =
+                        target.write(&bytes)
+                    {
+                            return Err(AsmError::Output {
+                                error: err.kind(),
+                                msg: err.to_string(),
+                            });
+                    }
+                }
+                Err(tokens::GetBytesError::NotWritableToken) => {
+                    // not really an error, just a token (such as PadRel/PadAbs)
+                    // that isn't designed to write any bytes, but may
+                    // change the program counter
+                }
+                // the following are all real errors 
+                Err(tokens::GetBytesError::UndefinedLabel {
+                    label_name,
+                }) => {
+                    return Err(AsmError::UndefinedLabel {
+                        label_name,
+                    });
                 }
                 Err(tokens::GetBytesError::UndefinedSubLabel {
                     label_name,
@@ -276,28 +335,12 @@ impl Asm {
                         sub_label_name,
                     });
                 }
-            };
-
-            let bytes_to_write = if bytes_encountered + next_token_bytes.len() < 0x100 {
-                0
-            } else if bytes_encountered < 0x100 {
-                bytes_encountered + next_token_bytes.len() - 0x100
-            } else {
-                next_token_bytes.len()
-            };
-
-            if bytes_to_write > 0 {
-                if let Err(err) =
-                    target.write(&next_token_bytes[(next_token_bytes.len() - bytes_to_write)..])
-                {
-                    return Err(AsmError::Output {
-                        error: err.kind(),
-                        msg: err.to_string(),
-                    });
-                }
             }
-
-            bytes_encountered += next_token_bytes.len();
+            
+            prog_state.counter = token.update_prog_counter(prog_state.counter);
+            if prog_state.counter > high_water_mark {
+                high_water_mark = prog_state.counter;
+            }
         }
         return Ok(());
     }
@@ -355,43 +398,6 @@ where
     })
 }
 
-fn verify_no_zero_page_write<I>(input: I) -> impl Iterator<Item = Result<UxnToken, AsmError>>
-where
-    I: Iterator<Item = Result<UxnToken, AsmError>>,
-{
-    let mut prog_loc = 0u16;
-
-    input.map(move |t| match t {
-        Err(e) => {
-            return Err(e);
-        }
-        Ok(t) => {
-            match t {
-                UxnToken::PadAbs(n) => {
-                    if n < prog_loc {
-                        return Err(AsmError::AbsPaddingRegression);
-                    }
-
-                    prog_loc += t.num_bytes(prog_loc);
-                }
-                UxnToken::PadRel(_) => {
-                    prog_loc += t.num_bytes(prog_loc);
-                }
-                _ => {
-                    let num_bytes = t.num_bytes(prog_loc);
-
-                    if num_bytes > 0 && prog_loc < 0x100 {
-                        return Err(AsmError::ZeroPageWrite);
-                    }
-
-                    prog_loc += num_bytes;
-                }
-            }
-            return Ok(t);
-        }
-    })
-}
-
 fn get_labels<'a, I: 'a>(
     input: I,
     labels: &'a mut HashMap<String, Label>,
@@ -424,7 +430,7 @@ where
             t
         }
         Ok(t) => {
-            prog_loc += t.num_bytes(prog_loc);
+            prog_loc = t.update_prog_counter(prog_loc);
             Ok(t)
         }
         Err(e) => Err(e),
@@ -464,6 +470,7 @@ where
 mod tests {
     use super::*;
     use tokens::LabelRef;
+    use std::io::Cursor;
 
     // test `split_to_token_strings` function; create input with
     // bracket separators and assert that it is split as expected
@@ -555,68 +562,6 @@ mod tests {
                 },
             })
         );
-    }
-
-    // test `verify_no_zero_page_write` function, with multiple paddings;
-    // test multiple paddings
-    // (both relative and absolue) and
-    // assert that function successfully runs
-    #[test]
-    fn test_verify_no_zero_page_write_happy_multi_padding() {
-        let input = vec![
-            Ok(UxnToken::PadRel(0x80)),
-            Ok(UxnToken::PadAbs(0xc0)),
-            Ok(UxnToken::PadRel(0x40)),
-            Ok(UxnToken::RawByte(0xff)),
-            Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawShort(0xbbcc)),
-        ];
-
-        let output = verify_no_zero_page_write(input.into_iter()).collect::<Vec<_>>();
-
-        let expected_output: Vec<Result<UxnToken, AsmError>>;
-        expected_output = vec![
-            Ok(UxnToken::PadRel(0x80)),
-            Ok(UxnToken::PadAbs(0xc0)),
-            Ok(UxnToken::PadRel(0x40)),
-            Ok(UxnToken::RawByte(0xff)),
-            Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawShort(0xbbcc)),
-        ];
-
-        assert_eq!(output, expected_output);
-    }
-
-    // test `verify_no_zero_page_write` function padding regression error;
-    // test having two absolute paddings, one padding to before
-    // current program location. Assert the correct error is
-    // received
-    #[test]
-    fn test_verify_no_zero_page_write_padding_regression() {
-        let input = vec![
-            Ok(UxnToken::PadAbs(0x100)),
-            Ok(UxnToken::RawByte(0xaa)),
-            Ok(UxnToken::RawShort(0xbbcc)),
-            Ok(UxnToken::PadAbs(0x101)),
-        ];
-
-        let output =
-            verify_no_zero_page_write(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
-
-        assert_eq!(output, Err(AsmError::AbsPaddingRegression));
-    }
-
-    // test `verify_no_zero_page_write` function zero page write error;
-    // test that attempting to write to the zero page results
-    // in the correct error
-    #[test]
-    fn test_verify_no_zero_page_write_zero_page_write() {
-        let input = vec![Ok(UxnToken::PadAbs(0xff)), Ok(UxnToken::RawByte(0xaa))];
-
-        let output =
-            verify_no_zero_page_write(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
-
-        assert_eq!(output, Err(AsmError::ZeroPageWrite));
     }
 
     // test `get_labels` function; test having
@@ -782,7 +727,78 @@ mod tests {
         ];
 
         let mut output = Vec::new();
+        let mut output = Cursor::new(output);
         let res = input.output(&mut output);
+        let output = output.into_inner();
+
+        assert_eq!(res, Ok(()));
+        assert_eq!(output, expected_output);
+    }
+
+    // test writing to the zero page generates the correct error
+    #[test]
+    fn test_output_zero_page_write() {
+        let mut input = Asm {
+            program: vec![
+                UxnToken::PadAbs(0xfe),
+                UxnToken::PadRel(0x01),
+                UxnToken::RawByte(0xaa),
+            ],
+            labels: HashMap::new()
+        };
+
+        let mut output = Cursor::new(Vec::new());
+        let res = input.output(&mut output);
+
+        let expected_output = Err(AsmError::ZeroPageWrite);
+        assert_eq!(res, expected_output);
+    }
+
+    // test writing to the zero page generates the correct error, 
+    // when you jump back to the zero page
+    #[test]
+    fn test_output_zero_page_write_jump_back() {
+        let mut input = Asm {
+            program: vec![
+                UxnToken::PadAbs(0xff),
+                UxnToken::PadRel(0x01),
+                UxnToken::RawByte(0xaa),
+                UxnToken::PadAbs(0xff),
+                UxnToken::RawByte(0xbb),
+            ],
+            labels: HashMap::new()
+        };
+
+        let mut output = Cursor::new(Vec::new());
+        let res = input.output(&mut output);
+
+        let expected_output = Err(AsmError::ZeroPageWrite);
+        assert_eq!(res, expected_output);
+    }
+
+    #[test]
+    fn test_output_jump_back() {
+        let mut input = Asm {
+            program: vec![
+                UxnToken::PadAbs(0x100),
+                UxnToken::RawByte(0xff),
+                UxnToken::RawByte(0xff),
+                UxnToken::RawByte(0xff),
+                UxnToken::RawByte(0xff),
+                UxnToken::PadAbs(0x101),
+                UxnToken::RawByte(0xbb),
+            ],
+            labels: HashMap::new(),
+        };
+
+        let expected_output = vec![
+            0xff, 0xbb, 0xff, 0xff
+        ];
+
+        let mut output = Vec::new();
+        let mut output = Cursor::new(output);
+        let res = input.output(&mut output);
+        let output = output.into_inner();
 
         assert_eq!(res, Ok(()));
         assert_eq!(output, expected_output);
@@ -798,6 +814,7 @@ mod tests {
         };
 
         let mut writer = Vec::new();
+        let mut writer = Cursor::new(writer);
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -818,6 +835,7 @@ mod tests {
         };
 
         let mut writer = Vec::new();
+        let mut writer = Cursor::new(writer);
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -841,6 +859,7 @@ mod tests {
         };
 
         let mut writer = Vec::new();
+        let mut writer = Cursor::new(writer);
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -868,6 +887,7 @@ mod tests {
         };
 
         let mut writer = Vec::new();
+        let mut writer = Cursor::new(writer);
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -892,6 +912,7 @@ mod tests {
         };
 
         let mut writer = Vec::new();
+        let mut writer = Cursor::new(writer);
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -920,6 +941,7 @@ mod tests {
         };
 
         let mut writer = Vec::new();
+        let mut writer = Cursor::new(writer);
         let output = input.output(&mut writer);
 
         assert_eq!(

@@ -339,6 +339,7 @@ pub enum GetBytesError {
         label_name: String,
         sub_label_name: String,
     },
+    NotWritableToken,
 }
 
 fn get_address_of_label(
@@ -391,16 +392,12 @@ impl UxnToken {
     pub fn get_bytes(&self, prog_state: &ProgState) -> Result<Vec<u8>, GetBytesError> {
         match self {
             UxnToken::Op(o) => return Ok(o.get_bytes()),
-            UxnToken::MacroDefine(_) => return Ok(vec![]),
-            UxnToken::MacroStartDelimiter => return Ok(vec![]),
-            UxnToken::MacroEndDelimiter => return Ok(vec![]),
-            UxnToken::MacroInvocation(_) => return Ok(vec![]),
-            UxnToken::PadAbs(n) => {
-                let bytes_to_write = *n - prog_state.counter;
-
-                return Ok(vec![0x00; bytes_to_write.into()]);
-            }
-            UxnToken::PadRel(n) => return Ok(vec![0x00; (*n).into()]),
+            UxnToken::MacroDefine(_) => return Err(GetBytesError::NotWritableToken),
+            UxnToken::MacroStartDelimiter => return Err(GetBytesError::NotWritableToken),
+            UxnToken::MacroEndDelimiter => return Err(GetBytesError::NotWritableToken),
+            UxnToken::MacroInvocation(_) => return Err(GetBytesError::NotWritableToken),
+            UxnToken::PadAbs(n) => return Err(GetBytesError::NotWritableToken),
+            UxnToken::PadRel(n) => return Err(GetBytesError::NotWritableToken),
             UxnToken::RawByte(b) => return Ok(vec![*b]),
             UxnToken::RawShort(s) => {
                 let bytes = s.to_be_bytes();
@@ -487,8 +484,8 @@ impl UxnToken {
 
                 return Ok(vec![0xa0, bytes[0], bytes[1]]);
             }
-            UxnToken::LabelDefine(_) => return Ok(vec![]),
-            UxnToken::SubLabelDefine(_) => return Ok(vec![]),
+            UxnToken::LabelDefine(_) => return Err(GetBytesError::NotWritableToken),
+            UxnToken::SubLabelDefine(_) => return Err(GetBytesError::NotWritableToken),
             UxnToken::RawAbsAddr(label_ref) => {
                 let address = get_address_of_label(label_ref, prog_state)?;
                 let bytes = address.to_be_bytes();
@@ -497,15 +494,13 @@ impl UxnToken {
         }
     }
 
-    pub fn num_bytes(&self, prog_counter: u16) -> u16 {
+    fn num_bytes(&self) -> u16 {
         match self {
             UxnToken::Op(_) => return 0x1,
             UxnToken::MacroDefine(_) => return 0x0,
             UxnToken::MacroStartDelimiter => return 0x0,
             UxnToken::MacroEndDelimiter => return 0x0,
             UxnToken::MacroInvocation(_) => return 0x0,
-            UxnToken::PadAbs(n) => return *n - prog_counter,
-            UxnToken::PadRel(n) => return *n,
             UxnToken::RawByte(_) => return 0x1,
             UxnToken::RawShort(_) => return 0x2,
             UxnToken::RawWord(w) => return w.len().try_into().unwrap(),
@@ -517,6 +512,16 @@ impl UxnToken {
             UxnToken::LabelDefine(_) => return 0x0,
             UxnToken::SubLabelDefine(_) => return 0x0,
             UxnToken::RawAbsAddr(_) => return 0x2,
+            UxnToken::PadAbs(n) => panic!(),
+            UxnToken::PadRel(n) => panic!(),
+        }
+    }
+
+    pub fn update_prog_counter(&self, prog_counter: u16) -> u16 {
+        match self {
+            UxnToken::PadAbs(n) => return *n,
+            UxnToken::PadRel(n) => return prog_counter + *n,
+            _ => return prog_counter + self.num_bytes(),
         }
     }
 }
@@ -806,6 +811,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_get_bytes_not_writable() {
+        let inputs = [
+            UxnToken::MacroDefine("blah".to_owned()),
+            UxnToken::MacroStartDelimiter,
+            UxnToken::MacroEndDelimiter,
+            UxnToken::MacroInvocation("blah".to_owned()),
+            UxnToken::PadAbs(0xff),
+            UxnToken::PadRel(0xff),
+            UxnToken::LabelDefine("blah".to_owned()),
+            UxnToken::SubLabelDefine("blah".to_owned()),
+        ];
+
+        let labels = HashMap::new();
+        let prog_state = ProgState {
+            counter: 0x0,
+            labels: &labels,
+            current_label: "".to_owned(),
+        };
+
+        for input in inputs.into_iter() {
+            let returned = input.get_bytes(&prog_state);
+            assert_eq!(returned, Err(GetBytesError::NotWritableToken));
+        }
+    }
+
     // test `get_bytes` function; for each possible input token,
     // verify that the correct sequence of bytes is produced for it
     #[test]
@@ -842,24 +873,6 @@ mod tests {
                 UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
                 vec![0x17],
             ),
-            (
-                UxnToken::MacroDefine("test_macro".to_owned()),
-                vec![],
-            ),
-            (
-                UxnToken::MacroStartDelimiter,
-                vec![],
-            ),
-            (
-                UxnToken::MacroEndDelimiter,
-                vec![],
-            ),
-            (
-                UxnToken::MacroInvocation("test_macro".to_owned()),
-                vec![],
-            ),
-            (UxnToken::PadAbs(0x100), vec![0x00; 0x100]),
-            (UxnToken::PadRel(0x80), vec![0x00; 0x80]),
             (UxnToken::RawByte(0xab), vec![0xab]),
             (UxnToken::RawShort(0xabcd), vec![0xab, 0xcd]),
             (UxnToken::LitByte(0xab), vec![0x80, 0xab]),
@@ -901,11 +914,6 @@ mod tests {
             (
                 UxnToken::LitAddressAbs("&sub_label2".parse::<LabelRef>().unwrap()),
                 vec![0xa0, 0x00, 0x76],
-            ),
-            (UxnToken::LabelDefine("test_label".to_owned()), vec![]),
-            (
-                UxnToken::SubLabelDefine("test_sub_label".to_owned()),
-                vec![],
             ),
             (
                 UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap()),
@@ -1034,7 +1042,7 @@ mod tests {
     }
 
     #[test]
-    fn test_num_bytes_happy() {
+    fn test_update_prog_counter() {
         let prog_counter = 0;
 
         let inputs = [
@@ -1074,36 +1082,56 @@ mod tests {
         ];
 
         for (token, expected) in inputs.into_iter() {
-            let returned = token.num_bytes(prog_counter);
+            let returned = token.update_prog_counter(prog_counter);
             assert_eq!(returned, expected);
         }
     }
 
-    // test get_bytes function when the program counter is not 0
+    // test update_prog_counter function when the program counter is not 0
     #[test]
-    fn test_get_bytes_prog_counter() {
-        let prog_state = ProgState {
-            counter: 0x70,
-            labels: &HashMap::new(),
-            current_label: "".to_owned(),
-        };
-        let token = UxnToken::PadAbs(0x100);
-        let returned = token.get_bytes(&prog_state);
-        assert_eq!(returned, Ok(vec![0x0; 0x90]));
-    }
+    fn test_update_prog_counter_non_zero() {
+        let prog_counter = 0x5;
 
-    // test get_bytes function when the program counter is not 0
-    // but the absolute padding is behind the program counter
-    #[test]
-    #[should_panic]
-    fn test_get_bytes_prog_counter_fail() {
-        let prog_state = ProgState {
-            counter: 0x170,
-            labels: &HashMap::new(),
-            current_label: "".to_owned(),
-        };
-        let token = UxnToken::PadAbs(0x100);
-        let _ = token.get_bytes(&prog_state);
+        let inputs = [
+            (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()), 0x1 + 0x5),
+            (UxnToken::MacroDefine("blah".to_owned()), 0x05),
+            (UxnToken::MacroStartDelimiter, 0x05),
+            (UxnToken::MacroEndDelimiter, 0x05),
+            (UxnToken::MacroInvocation("blah".to_owned()), 0x05),
+            (UxnToken::PadAbs(0x1ff), 0x01ff),
+            (UxnToken::PadRel(0x1fe), 0x203),
+            (UxnToken::RawByte(0xfe), 0x6),
+            (UxnToken::RawShort(0xabcd), 0x7),
+            (
+                UxnToken::RawWord("hello world".as_bytes().iter().copied().collect()),
+                0xb + 0x5,
+            ),
+            (UxnToken::LitByte(0xab), 0x2 + 0x5),
+            (UxnToken::LitShort(0xabcd), 0x3 + 0x5),
+            (
+                UxnToken::LitAddressZeroPage("test_label".parse::<LabelRef>().unwrap()),
+                0x2 + 0x5,
+            ),
+            (
+                UxnToken::LitAddressRel("test_label".parse::<LabelRef>().unwrap()),
+                0x2 + 0x5,
+            ),
+            (
+                UxnToken::LitAddressAbs("test_label".parse::<LabelRef>().unwrap()),
+                0x3 + 0x5,
+            ),
+            (UxnToken::LabelDefine("test_label".to_owned()), 0x0 + 0x5),
+            (UxnToken::SubLabelDefine("test_sub_label".to_owned()), 0x0 + 0x5),
+            (
+                UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap()),
+                0x2 + 0x5,
+            ),
+        ];
+
+        for (token, expected) in inputs.into_iter() {
+            let returned = token.update_prog_counter(prog_counter);
+            assert_eq!(returned, expected);
+        }
     }
 
     #[test]
@@ -1172,24 +1200,6 @@ mod tests {
                 label_name: "test_label".to_owned()
             })
         );
-    }
-
-    // test num_bytes function when the program counter is not 0
-    #[test]
-    fn test_num_bytes_prog_counter() {
-        let prog_counter = 0x70;
-        let token = UxnToken::PadAbs(0x100);
-        let returned = token.num_bytes(prog_counter);
-        assert_eq!(returned, 0x90);
-    }
-
-    // TODO need to return error test num_bytes function when the program counter is not 0 but the absolute padding is behind the program counter
-    #[test]
-    #[should_panic]
-    fn test_num_bytes_prog_counter_fail() {
-        let prog_counter = 0x170;
-        let token = UxnToken::PadAbs(0x100);
-        token.num_bytes(prog_counter);
     }
 
     // test from_str for UxnToken with an input that should be parsed as a raw byte
