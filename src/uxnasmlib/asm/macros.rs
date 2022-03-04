@@ -16,26 +16,34 @@ enum MacroState {
 
 const MAX_MACRO_DEPTH: u8 = 5;
 
-fn expand_macro(macro_name: &str, macros: &HashMap<String, Vec<UxnToken>>, depth: u8) -> Vec<Result<UxnToken, AsmError>>
-{
+fn expand_macro(
+    macro_name: &str,
+    macros: &HashMap<String, Vec<UxnToken>>,
+    depth: u8,
+) -> Vec<Result<UxnToken, AsmError>> {
     if depth >= MAX_MACRO_DEPTH {
-        return vec!(Err(AsmError::MaxMacroCallDepthExceeded{macro_name: macro_name.to_owned()}));
+        return vec![Err(AsmError::MaxMacroCallDepthExceeded {
+            macro_name: macro_name.to_owned(),
+        })];
     }
 
     if let Some(macro_body) = macros.get(macro_name) {
-        return macro_body.iter().cloned()
-            .flat_map(|e| {
-                match e {
-                    UxnToken::MacroInvocation(ref macro_name) => {
-                        expand_macro(macro_name, macros, depth+1)
-                    }
-                    _ => {
-                        vec!(Ok(e))
-                    }
+        return macro_body
+            .iter()
+            .cloned()
+            .flat_map(|e| match e {
+                UxnToken::MacroInvocation(ref macro_name) => {
+                    expand_macro(macro_name, macros, depth + 1)
                 }
-            }).collect::<Vec<_>>();
+                _ => {
+                    vec![Ok(e)]
+                }
+            })
+            .collect::<Vec<_>>();
     } else {
-        return vec!(Err(AsmError::UnrecognisedMacro{macro_name: macro_name.to_owned()}));
+        return vec![Err(AsmError::UnrecognisedMacro {
+            macro_name: macro_name.to_owned(),
+        })];
     }
 }
 
@@ -49,23 +57,23 @@ where
     let mut state = MacroState::MainBody;
 
     input.flat_map(move |t| match t {
-        Err(e) => vec!(Err(e)),
+        Err(e) => vec![Err(e)],
         Ok(UxnToken::MacroDefine(ref macro_name)) => match state {
             MacroState::MainBody => {
                 if macros.contains_key(macro_name) {
-                    return vec!(Err(AsmError::DoubleMacroDefine {
+                    return vec![Err(AsmError::DoubleMacroDefine {
                         macro_name: macro_name.clone(),
-                    }));
+                    })];
                 }
 
                 state = MacroState::MacroDefinitionHead {
                     macro_name: macro_name.clone(),
                 };
-                return vec!();
+                return vec![];
             }
             MacroState::MacroDefinitionHead { macro_name: ref _m } => {
                 let macro_name = macro_name.clone();
-                return vec!(Err(AsmError::MalformedMacroDefine { macro_name }));
+                return vec![Err(AsmError::MalformedMacroDefine { macro_name })];
             }
             MacroState::MacroDefinitionBody {
                 macro_name: ref outer_macro_name,
@@ -73,36 +81,36 @@ where
             } => {
                 let inner_macro_name = macro_name.clone();
                 let outer_macro_name = outer_macro_name.clone();
-                return vec!(Err(AsmError::MacroDefineWithinMacro {
+                return vec![Err(AsmError::MacroDefineWithinMacro {
                     outer_macro_name,
                     inner_macro_name,
-                }));
+                })];
             }
         },
         Ok(UxnToken::MacroStartDelimiter) => match state {
             MacroState::MainBody => {
-                return vec!(Err(AsmError::MacroStartDelimiterMisplaced));
+                return vec![Err(AsmError::MacroStartDelimiterMisplaced)];
             }
             MacroState::MacroDefinitionHead { ref macro_name } => {
                 state = MacroState::MacroDefinitionBody {
                     macro_name: macro_name.clone(),
                     macro_body: Vec::new(),
                 };
-                return vec!();
+                return vec![];
             }
             MacroState::MacroDefinitionBody {
                 macro_name: ref _name,
                 macro_body: ref _body,
             } => {
-                return vec!(Err(AsmError::MacroStartDelimiterMisplaced));
+                return vec![Err(AsmError::MacroStartDelimiterMisplaced)];
             }
         },
         Ok(UxnToken::MacroEndDelimiter) => match state {
             MacroState::MainBody => {
-                return vec!(Err(AsmError::MacroEndDelimiterMisplaced));
+                return vec![Err(AsmError::MacroEndDelimiterMisplaced)];
             }
             MacroState::MacroDefinitionHead { macro_name: _ } => {
-                return vec!(Err(AsmError::MacroEndDelimiterMisplaced));
+                return vec![Err(AsmError::MacroEndDelimiterMisplaced)];
             }
             MacroState::MacroDefinitionBody {
                 macro_name: _,
@@ -117,7 +125,7 @@ where
                     macros.insert(macro_name.clone(), macro_body);
                 }
 
-                return vec!();
+                return vec![];
             }
         },
         Ok(UxnToken::MacroInvocation(ref macro_name)) => match state {
@@ -125,33 +133,33 @@ where
                 return expand_macro(macro_name, &macros, 0);
             }
             MacroState::MacroDefinitionHead { ref macro_name } => {
-                return vec!(Err(AsmError::MalformedMacroDefine {
+                return vec![Err(AsmError::MalformedMacroDefine {
                     macro_name: macro_name.clone(),
-                }));
+                })];
             }
             MacroState::MacroDefinitionBody {
                 macro_name: _,
                 ref mut macro_body,
             } => {
                 macro_body.push(t.unwrap());
-                return vec!();
+                return vec![];
             }
-        }
+        },
         Ok(t) => match state {
             MacroState::MainBody => {
-                return vec!(Ok(t));
+                return vec![Ok(t)];
             }
             MacroState::MacroDefinitionHead { ref macro_name } => {
-                return vec!(Err(AsmError::MalformedMacroDefine {
+                return vec![Err(AsmError::MalformedMacroDefine {
                     macro_name: macro_name.clone(),
-                }));
+                })];
             }
             MacroState::MacroDefinitionBody {
                 macro_name: _,
                 ref mut macro_body,
             } => {
                 macro_body.push(t);
-                return vec!();
+                return vec![];
             }
         },
     })
@@ -388,43 +396,35 @@ mod tests {
         let input = vec![
             Ok(UxnToken::PadAbs(0x100)),
             Ok(UxnToken::RawByte(0xaa)),
-
             Ok(UxnToken::MacroDefine("test_macro3".to_owned())),
             Ok(UxnToken::MacroStartDelimiter),
             Ok(UxnToken::RawByte(0x79)),
             Ok(UxnToken::RawByte(0x79)),
             Ok(UxnToken::MacroInvocation("test_macro4".to_owned())),
             Ok(UxnToken::MacroEndDelimiter),
-
             Ok(UxnToken::RawByte(0xbb)),
-
             Ok(UxnToken::MacroDefine("test_macro".to_owned())),
             Ok(UxnToken::MacroStartDelimiter),
             Ok(UxnToken::RawByte(0x99)),
             Ok(UxnToken::MacroInvocation("test_macro2".to_owned())),
             Ok(UxnToken::RawByte(0x99)),
             Ok(UxnToken::MacroEndDelimiter),
-
             Ok(UxnToken::RawByte(0xff)),
-
             Ok(UxnToken::MacroDefine("test_macro2".to_owned())),
             Ok(UxnToken::MacroStartDelimiter),
             Ok(UxnToken::RawByte(0x88)),
             Ok(UxnToken::MacroInvocation("test_macro3".to_owned())),
             Ok(UxnToken::RawByte(0x88)),
             Ok(UxnToken::MacroEndDelimiter),
-
             Ok(UxnToken::MacroDefine("test_macro4".to_owned())),
             Ok(UxnToken::MacroStartDelimiter),
             Ok(UxnToken::RawByte(0x11)),
             Ok(UxnToken::MacroInvocation("test_macro5".to_owned())),
             Ok(UxnToken::MacroEndDelimiter),
-
             Ok(UxnToken::MacroDefine("test_macro5".to_owned())),
             Ok(UxnToken::MacroStartDelimiter),
             Ok(UxnToken::RawByte(0x12)),
             Ok(UxnToken::MacroEndDelimiter),
-
             Ok(UxnToken::RawByte(0xcc)),
             Ok(UxnToken::MacroInvocation("test_macro".to_owned())),
             Ok(UxnToken::RawByte(0xdd)),
@@ -436,33 +436,24 @@ mod tests {
             Ok(UxnToken::RawByte(0xbb)),
             Ok(UxnToken::RawByte(0xff)),
             Ok(UxnToken::RawByte(0xcc)),
-
             // invoking 'test_macro'
             Ok(UxnToken::RawByte(0x99)),
-
             // invoking 'test_macro2' (inside 'test_macro')
             Ok(UxnToken::RawByte(0x88)),
-
             // invoking 'test_macro3' (inside 'test_macro2')
             Ok(UxnToken::RawByte(0x79)),
             Ok(UxnToken::RawByte(0x79)),
-
             // invoking 'test_macro4' (inside 'test_macro3')
             Ok(UxnToken::RawByte(0x11)),
-
             // invoking 'test_macro5' (inside 'test_macro4')
             Ok(UxnToken::RawByte(0x12)),
-
             // leaving 'test_macro5'
             // leaving 'test_macro4'
             // leaving 'test_macro3'
-
             Ok(UxnToken::RawByte(0x88)),
             // leaving 'test_macro2'
-
             Ok(UxnToken::RawByte(0x99)),
             // leaving 'test_macro'
-
             Ok(UxnToken::RawByte(0xdd)),
         ];
 
@@ -479,19 +470,21 @@ mod tests {
             Ok(UxnToken::RawByte(0x01)),
             Ok(UxnToken::MacroInvocation("test_macro2".to_owned())),
             Ok(UxnToken::MacroEndDelimiter),
-
             Ok(UxnToken::MacroDefine("test_macro2".to_owned())),
             Ok(UxnToken::MacroStartDelimiter),
             Ok(UxnToken::RawByte(0x02)),
             Ok(UxnToken::MacroInvocation("test_macro1".to_owned())),
             Ok(UxnToken::MacroEndDelimiter),
-
             Ok(UxnToken::MacroInvocation("test_macro1".to_owned())),
         ];
 
         let output = process_macros(input.into_iter()).collect::<Result<Vec<_>, AsmError>>();
 
-        assert_eq!(output, Err(AsmError::MaxMacroCallDepthExceeded{
-            macro_name: "test_macro2".to_owned()}));
+        assert_eq!(
+            output,
+            Err(AsmError::MaxMacroCallDepthExceeded {
+                macro_name: "test_macro2".to_owned()
+            })
+        );
     }
 }

@@ -1093,7 +1093,10 @@ mod tests {
         let prog_counter = 0x5;
 
         let inputs = [
-            (UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()), 0x1 + 0x5),
+            (
+                UxnToken::Op("DEO".parse::<ops::OpObject>().unwrap()),
+                0x1 + 0x5,
+            ),
             (UxnToken::MacroDefine("blah".to_owned()), 0x05),
             (UxnToken::MacroStartDelimiter, 0x05),
             (UxnToken::MacroEndDelimiter, 0x05),
@@ -1121,7 +1124,10 @@ mod tests {
                 0x3 + 0x5,
             ),
             (UxnToken::LabelDefine("test_label".to_owned()), 0x0 + 0x5),
-            (UxnToken::SubLabelDefine("test_sub_label".to_owned()), 0x0 + 0x5),
+            (
+                UxnToken::SubLabelDefine("test_sub_label".to_owned()),
+                0x0 + 0x5,
+            ),
             (
                 UxnToken::RawAbsAddr("test_label".parse::<LabelRef>().unwrap()),
                 0x2 + 0x5,

@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::io;
-use std::io::Write;
 use std::io::Seek;
 use std::io::SeekFrom;
+use std::io::Write;
 use std::str::FromStr;
 
 pub mod prog_state {
@@ -182,8 +182,11 @@ impl fmt::Display for AsmError {
                 write!(f, "undefined macro '{}'", macro_name)
             }
             AsmError::MaxMacroCallDepthExceeded { macro_name } => {
-                write!(f, "too many nested macro calls for call to '{}'",
-                       macro_name)
+                write!(
+                    f,
+                    "too many nested macro calls for call to '{}'",
+                    macro_name
+                )
             }
         }
     }
@@ -230,7 +233,6 @@ impl Asm {
         let mut high_water_mark = 0u16;
 
         for token in &self.program {
-
             if let UxnToken::LabelDefine(label_name) = token {
                 prog_state.current_label = label_name.clone();
                 continue;
@@ -238,7 +240,6 @@ impl Asm {
 
             match token.get_bytes(&prog_state) {
                 Ok(bytes) => {
-
                     // check for zero page write
                     if prog_state.counter < 0x100 {
                         return Err(AsmError::ZeroPageWrite);
@@ -256,9 +257,8 @@ impl Asm {
                             });
                         }
 
-                        if let Err(err) = 
-                        target.write(
-                            &vec![0x00; (prog_state.counter - high_water_mark).into()])
+                        if let Err(err) =
+                            target.write(&vec![0x00; (prog_state.counter - high_water_mark).into()])
                         {
                             return Err(AsmError::Output {
                                 error: err.kind(),
@@ -266,10 +266,12 @@ impl Asm {
                             });
                         }
                     } else {
-                        // the program counter is pointing to a part of the 
+                        // the program counter is pointing to a part of the
                         // 'target' that has already been written to, seek to
                         // that location
-                        if let Err(err) = target.seek(SeekFrom::Start((prog_state.counter - 0x100).into())) {
+                        if let Err(err) =
+                            target.seek(SeekFrom::Start((prog_state.counter - 0x100).into()))
+                        {
                             return Err(AsmError::Output {
                                 error: err.kind(),
                                 msg: err.to_string(),
@@ -280,13 +282,11 @@ impl Asm {
                     // at this point the 'target' file/buffer is guaranteed
                     // to be at the location we want to write the bytes corresponding
                     // to the current token, so write
-                    if let Err(err) =
-                        target.write(&bytes)
-                    {
-                            return Err(AsmError::Output {
-                                error: err.kind(),
-                                msg: err.to_string(),
-                            });
+                    if let Err(err) = target.write(&bytes) {
+                        return Err(AsmError::Output {
+                            error: err.kind(),
+                            msg: err.to_string(),
+                        });
                     }
                 }
                 Err(tokens::GetBytesError::NotWritableToken) => {
@@ -294,13 +294,9 @@ impl Asm {
                     // that isn't designed to write any bytes, but may
                     // change the program counter
                 }
-                // the following are all real errors 
-                Err(tokens::GetBytesError::UndefinedLabel {
-                    label_name,
-                }) => {
-                    return Err(AsmError::UndefinedLabel {
-                        label_name,
-                    });
+                // the following are all real errors
+                Err(tokens::GetBytesError::UndefinedLabel { label_name }) => {
+                    return Err(AsmError::UndefinedLabel { label_name });
                 }
                 Err(tokens::GetBytesError::UndefinedSubLabel {
                     label_name,
@@ -336,7 +332,7 @@ impl Asm {
                     });
                 }
             }
-            
+
             prog_state.counter = token.update_prog_counter(prog_state.counter);
             if prog_state.counter > high_water_mark {
                 high_water_mark = prog_state.counter;
@@ -469,8 +465,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokens::LabelRef;
     use std::io::Cursor;
+    use tokens::LabelRef;
 
     // test `split_to_token_strings` function; create input with
     // bracket separators and assert that it is split as expected
@@ -486,8 +482,8 @@ mod tests {
         assert_eq!(
             split_to_token_strings(input.into_iter()).collect::<Vec<_>>(),
             vec!(
-                "tokenA", "tokenB", "tokenC", "{", "tokenD", "}", "tokenE", "(", "tokenF", "tokenG",
-                "tokenH", "[", "tokenI", "]", "tokenJ", "[", "tokenK",
+                "tokenA", "tokenB", "tokenC", "{", "tokenD", "}", "tokenE", "(", "tokenF",
+                "tokenG", "tokenH", "[", "tokenI", "]", "tokenJ", "[", "tokenK",
             )
             .into_iter()
             .map(|t| t.to_owned())
@@ -744,7 +740,7 @@ mod tests {
                 UxnToken::PadRel(0x01),
                 UxnToken::RawByte(0xaa),
             ],
-            labels: HashMap::new()
+            labels: HashMap::new(),
         };
 
         let mut output = Cursor::new(Vec::new());
@@ -754,7 +750,7 @@ mod tests {
         assert_eq!(res, expected_output);
     }
 
-    // test writing to the zero page generates the correct error, 
+    // test writing to the zero page generates the correct error,
     // when you jump back to the zero page
     #[test]
     fn test_output_zero_page_write_jump_back() {
@@ -766,7 +762,7 @@ mod tests {
                 UxnToken::PadAbs(0xff),
                 UxnToken::RawByte(0xbb),
             ],
-            labels: HashMap::new()
+            labels: HashMap::new(),
         };
 
         let mut output = Cursor::new(Vec::new());
@@ -791,9 +787,7 @@ mod tests {
             labels: HashMap::new(),
         };
 
-        let expected_output = vec![
-            0xff, 0xbb, 0xff, 0xff
-        ];
+        let expected_output = vec![0xff, 0xbb, 0xff, 0xff];
 
         let mut output = Vec::new();
         let mut output = Cursor::new(output);
