@@ -1,28 +1,18 @@
-use std::collections::HashMap;
+use std::io::Cursor;
+use std::io::Write;
+use std::io::Seek;
+use std::io::SeekFrom;
 
 fn main() {
-    let l = vec!("bill".to_owned(), "ben".to_owned(), "bill".to_owned(), "bill".to_owned(), "beth".to_owned());
-    let mut m = HashMap::new();
 
-    let l = l.into_iter().map(|e| {
-        return e;
-    });
+    let mut c = Cursor::new(Vec::new()); 
 
-    let l = thingy(l.into_iter(), &mut m);
+    c.write(&[1,2,3,4]).unwrap();
 
-    let _l = l.collect::<Vec<_>>();
+    c.seek(SeekFrom::Start(1)).unwrap();
+    c.write(&[9,]).unwrap();
 
-    println!("{:?}", m);
-}
+    let v = c.into_inner();
 
-fn thingy<'a, W:'a>(i: W, m: &'a mut HashMap<String, u32>) -> impl Iterator<Item=String> + 'a
-where W: Iterator<Item=String>
-{
-   i.filter(|e| {
-       if e == "beth" {
-           return false;
-       }
-       m.insert(e.clone(), 44);
-       return true;
-   })
+    println!("{:?}",v);
 }

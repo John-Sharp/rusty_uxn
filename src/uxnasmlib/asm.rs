@@ -47,7 +47,6 @@ pub struct Asm {
 
 #[derive(Debug, PartialEq)]
 pub enum AsmError {
-    AbsPaddingRegression,
     ZeroPageWrite,
     TokenParseError {
         parse_error: tokens::ParseError,
@@ -103,12 +102,6 @@ pub enum AsmError {
 impl fmt::Display for AsmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AsmError::AbsPaddingRegression => {
-                write!(
-                    f,
-                    "attempt to pad to absolute program location behind current counter"
-                )
-            }
             AsmError::ZeroPageWrite => {
                 write!(f, "zero page write")
             }
@@ -722,8 +715,7 @@ mod tests {
             0x00, 0x00, 0x80, 0x33,
         ];
 
-        let mut output = Vec::new();
-        let mut output = Cursor::new(output);
+        let mut output = Cursor::new(Vec::new());
         let res = input.output(&mut output);
         let output = output.into_inner();
 
@@ -789,8 +781,7 @@ mod tests {
 
         let expected_output = vec![0xff, 0xbb, 0xff, 0xff];
 
-        let mut output = Vec::new();
-        let mut output = Cursor::new(output);
+        let mut output = Cursor::new(Vec::new());
         let res = input.output(&mut output);
         let output = output.into_inner();
 
@@ -807,8 +798,7 @@ mod tests {
             labels: HashMap::new(),
         };
 
-        let mut writer = Vec::new();
-        let mut writer = Cursor::new(writer);
+        let mut writer = Cursor::new(Vec::new());
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -828,8 +818,7 @@ mod tests {
             labels: HashMap::new(),
         };
 
-        let mut writer = Vec::new();
-        let mut writer = Cursor::new(writer);
+        let mut writer = Cursor::new(Vec::new());
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -852,8 +841,7 @@ mod tests {
             labels,
         };
 
-        let mut writer = Vec::new();
-        let mut writer = Cursor::new(writer);
+        let mut writer = Cursor::new(Vec::new());
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -880,8 +868,7 @@ mod tests {
             labels,
         };
 
-        let mut writer = Vec::new();
-        let mut writer = Cursor::new(writer);
+        let mut writer = Cursor::new(Vec::new());
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -905,8 +892,7 @@ mod tests {
             labels,
         };
 
-        let mut writer = Vec::new();
-        let mut writer = Cursor::new(writer);
+        let mut writer = Cursor::new(Vec::new());
         let output = input.output(&mut writer);
 
         assert_eq!(
@@ -934,8 +920,7 @@ mod tests {
             labels,
         };
 
-        let mut writer = Vec::new();
-        let mut writer = Cursor::new(writer);
+        let mut writer = Cursor::new(Vec::new());
         let output = input.output(&mut writer);
 
         assert_eq!(
