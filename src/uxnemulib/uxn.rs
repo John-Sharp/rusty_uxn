@@ -1,17 +1,24 @@
 use std::fmt;
 use std::error::Error;
 
+pub const INIT_VECTOR: u16 = 0x100;
+
 pub struct Uxn {
     ram: Vec<u8>,
 }
 
 #[derive(Debug)]
-pub struct UxnError {
+pub enum UxnError {
+    InvalidMemoryAccess{address: u16},
 }
 
 impl fmt::Display for UxnError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Error running Uxn")
+        match self {
+            UxnError::InvalidMemoryAccess{address} => {
+                write!(f, "attempt to access invalid memory address: {:x}", address)
+            }
+        }
     }
 }
 
@@ -24,10 +31,29 @@ impl Uxn {
     {
         let mut ram = vec![0x0; 0x10000];
 
-        for (ram_loc, val) in (&mut ram[0x100..]).iter_mut().zip(rom).take(0x100000 - 0x100) {
+        let init_vector: usize = INIT_VECTOR.into();
+        for (ram_loc, val) in (&mut ram[init_vector..]).iter_mut().zip(rom).take(0x10000 - init_vector) {
             *ram_loc = val;
         }
 
         return Ok(Uxn{ram});
+    }
+
+    pub fn run(&self, vector: u16) -> Result<(), UxnError>
+    {
+        let mut program_counter: usize = vector.into();
+        loop {
+            let instr = match self.ram.get(program_counter) {
+                Some(instr) => *instr,
+                None => { return Err(UxnError::InvalidMemoryAccess{address: vector}); }
+            };
+
+            if instr == 0x0 {
+                return Ok(());
+            }
+
+            println!("need to execute {:x}", instr);
+            program_counter += 1;
+        }
     }
 }

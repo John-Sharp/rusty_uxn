@@ -61,6 +61,8 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
     let rom = rom.map(|b| b.unwrap());
     let uxn = uxn::Uxn::new(rom)?;
 
+    uxn.run(uxn::INIT_VECTOR)?;
+
     let window = Window::new_centered("Title", (512, 320)).unwrap();
     window.run_loop(MyWindowHandler{});
 }
