@@ -40,6 +40,11 @@ struct OpDescription {
     op_code: OpCode,
     byte: u8,
     token: &'static str,
+
+    // TODO
+    // #[cfg(any(test, feature = "asm"))]
+    // handler
+    
 }
 
 const OP_LIST: &'static [OpDescription] = &[
