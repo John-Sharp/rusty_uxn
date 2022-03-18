@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum OpCode {
     Brk,
     Inc,
@@ -36,6 +36,47 @@ pub enum OpCode {
     Sft,
 }
 
+struct OpDescription {
+    op_code: OpCode,
+    byte: u8,
+    token: &'static str,
+}
+
+const OP_LIST: &'static [OpDescription] = &[
+    OpDescription{op_code: OpCode::Brk, byte: 0x00, token: "BRK"},
+    OpDescription{op_code: OpCode::Inc, byte: 0x01, token: "INC"},
+    OpDescription{op_code: OpCode::Pop, byte: 0x02, token: "POP"},
+    OpDescription{op_code: OpCode::Dup, byte: 0x03, token: "DUP"},
+    OpDescription{op_code: OpCode::Nip, byte: 0x04, token: "NIP"},
+    OpDescription{op_code: OpCode::Swp, byte: 0x05, token: "SWP"},
+    OpDescription{op_code: OpCode::Ovr, byte: 0x06, token: "OVR"},
+    OpDescription{op_code: OpCode::Rot, byte: 0x07, token: "ROT"},
+    OpDescription{op_code: OpCode::Equ, byte: 0x08, token: "EQU"},
+    OpDescription{op_code: OpCode::Neq, byte: 0x09, token: "NEQ"},
+    OpDescription{op_code: OpCode::Gth, byte: 0x0a, token: "GTH"},
+    OpDescription{op_code: OpCode::Lth, byte: 0x0b, token: "LTH"},
+    OpDescription{op_code: OpCode::Jmp, byte: 0x0c, token: "JMP"},
+    OpDescription{op_code: OpCode::Jcn, byte: 0x0d, token: "JCN"},
+    OpDescription{op_code: OpCode::Jsr, byte: 0x0e, token: "JSR"},
+    OpDescription{op_code: OpCode::Sth, byte: 0x0f, token: "STH"},
+    OpDescription{op_code: OpCode::Ldz, byte: 0x10, token: "LDZ"},
+    OpDescription{op_code: OpCode::Stz, byte: 0x11, token: "STZ"},
+    OpDescription{op_code: OpCode::Ldr, byte: 0x12, token: "LDR"},
+    OpDescription{op_code: OpCode::Str, byte: 0x13, token: "STR"},
+    OpDescription{op_code: OpCode::Lda, byte: 0x14, token: "LDA"},
+    OpDescription{op_code: OpCode::Sta, byte: 0x15, token: "STA"},
+    OpDescription{op_code: OpCode::Dei, byte: 0x16, token: "DEI"},
+    OpDescription{op_code: OpCode::Deo, byte: 0x17, token: "DEO"},
+    OpDescription{op_code: OpCode::Add, byte: 0x18, token: "ADD"},
+    OpDescription{op_code: OpCode::Sub, byte: 0x19, token: "SUB"},
+    OpDescription{op_code: OpCode::Mul, byte: 0x1a, token: "MUL"},
+    OpDescription{op_code: OpCode::Div, byte: 0x1b, token: "DIV"},
+    OpDescription{op_code: OpCode::And, byte: 0x1c, token: "AND"},
+    OpDescription{op_code: OpCode::Ora, byte: 0x1d, token: "ORA"},
+    OpDescription{op_code: OpCode::Eor, byte: 0x1e, token: "EOR"},
+    OpDescription{op_code: OpCode::Sft, byte: 0x1f, token: "SFT"},
+];
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpObject {
     keep: bool,
@@ -46,40 +87,10 @@ pub struct OpObject {
 
 impl OpObject {
     pub fn get_bytes(&self) -> Vec<u8> {
-        let byte = match self.op_code {
-            OpCode::Brk => 0x00,
-            OpCode::Inc => 0x01,
-            OpCode::Pop => 0x02,
-            OpCode::Dup => 0x03,
-            OpCode::Nip => 0x04,
-            OpCode::Swp => 0x05,
-            OpCode::Ovr => 0x06,
-            OpCode::Rot => 0x07,
-            OpCode::Equ => 0x08,
-            OpCode::Neq => 0x09,
-            OpCode::Gth => 0x0a,
-            OpCode::Lth => 0x0b,
-            OpCode::Jmp => 0x0c,
-            OpCode::Jcn => 0x0d,
-            OpCode::Jsr => 0x0e,
-            OpCode::Sth => 0x0f,
-            OpCode::Ldz => 0x10,
-            OpCode::Stz => 0x11,
-            OpCode::Ldr => 0x12,
-            OpCode::Str => 0x13,
-            OpCode::Lda => 0x14,
-            OpCode::Sta => 0x15,
-            OpCode::Dei => 0x16,
-            OpCode::Deo => 0x17,
-            OpCode::Add => 0x18,
-            OpCode::Sub => 0x19,
-            OpCode::Mul => 0x1a,
-            OpCode::Div => 0x1b,
-            OpCode::And => 0x1c,
-            OpCode::Ora => 0x1d,
-            OpCode::Eor => 0x1e,
-            OpCode::Sft => 0x1f,
-        };
+        let byte = OP_LIST.iter().find(
+            |e| e.op_code == self.op_code)
+            .expect("No matching OP_LIST entry for OpCode")
+            .byte;
 
         let byte = if self.keep { byte | 0b10000000 } else { byte };
 
@@ -137,38 +148,15 @@ impl FromStr for OpObject {
                 short: false,
                 op_code: OpCode::Brk,
             },
-            "INC" => plain_op_object(OpCode::Inc),
-            "POP" => plain_op_object(OpCode::Pop),
-            "DUP" => plain_op_object(OpCode::Dup),
-            "NIP" => plain_op_object(OpCode::Nip),
-            "SWP" => plain_op_object(OpCode::Swp),
-            "OVR" => plain_op_object(OpCode::Ovr),
-            "ROT" => plain_op_object(OpCode::Rot),
-            "EQU" => plain_op_object(OpCode::Equ),
-            "NEQ" => plain_op_object(OpCode::Neq),
-            "GTH" => plain_op_object(OpCode::Gth),
-            "LTH" => plain_op_object(OpCode::Lth),
-            "JMP" => plain_op_object(OpCode::Jmp),
-            "JCN" => plain_op_object(OpCode::Jcn),
-            "JSR" => plain_op_object(OpCode::Jsr),
-            "STH" => plain_op_object(OpCode::Sth),
-            "LDZ" => plain_op_object(OpCode::Ldz),
-            "STZ" => plain_op_object(OpCode::Stz),
-            "LDR" => plain_op_object(OpCode::Ldr),
-            "STR" => plain_op_object(OpCode::Str),
-            "LDA" => plain_op_object(OpCode::Lda),
-            "STA" => plain_op_object(OpCode::Sta),
-            "DEI" => plain_op_object(OpCode::Dei),
-            "DEO" => plain_op_object(OpCode::Deo),
-            "ADD" => plain_op_object(OpCode::Add),
-            "SUB" => plain_op_object(OpCode::Sub),
-            "MUL" => plain_op_object(OpCode::Mul),
-            "DIV" => plain_op_object(OpCode::Div),
-            "AND" => plain_op_object(OpCode::And),
-            "ORA" => plain_op_object(OpCode::Ora),
-            "EOR" => plain_op_object(OpCode::Eor),
-            "SFT" => plain_op_object(OpCode::Sft),
-            _ => return Err(ParseOpObjectError {}),
+            _ => {
+                if let Some(op_description) = OP_LIST.iter().find(
+                    |e| e.token == opcode
+                    ) {
+                    plain_op_object(op_description.op_code)
+                } else {
+                    return Err(ParseOpObjectError {})
+                }
+            },
         };
 
         for mode_flag in s.chars().skip(3) {

@@ -2,8 +2,8 @@ use crate::uxnasmlib::asm::prog_state::ProgState;
 use std::fmt;
 use std::str::FromStr;
 
-mod ops;
-use ops::OpObject;
+use crate::ops;
+use crate::ops::OpObject;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LabelRef {
