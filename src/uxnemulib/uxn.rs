@@ -1,13 +1,8 @@
 use std::fmt;
 use std::error::Error;
+use crate::ops::OpObject;
 
 pub const INIT_VECTOR: u16 = 0x100;
-
-mod interface {
-    pub trait Uxn {
-        fn readFromRam(addr: u16) -> u8;
-    }
-}
 
 pub struct Uxn {
     ram: Vec<u8>,
@@ -30,8 +25,10 @@ impl fmt::Display for UxnError {
 
 impl Error for UxnError {}
 
-impl interface::Uxn for Uxn {
-    fn readFromRam(addr: u16) -> u8 {
+use crate::uxninterface;
+
+impl uxninterface::Uxn for Uxn {
+    fn read_from_ram(&self, addr: u16) -> u8 {
         return 0xab;
     }
 }
@@ -63,6 +60,12 @@ impl Uxn {
             if instr == 0x0 {
                 return Ok(());
             }
+
+            // parse instr into OpObject
+            let op = OpObject::from_byte(instr);
+ 
+            // call its handler
+            op.execute(Box::new(self));
 
             println!("need to execute {:x}", instr);
             program_counter += 1;

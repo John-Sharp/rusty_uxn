@@ -1,8 +1,11 @@
+#[cfg(feature = "emu")]
+pub mod uxninterface;
+
 pub mod ops;
 
-#[cfg(any(test, feature = "asm"))]
+#[cfg(feature = "asm")]
 pub mod uxnasmlib;
 
 
-#[cfg(any(test, feature = "emu"))]
+#[cfg(feature = "emu")]
 pub mod uxnemulib;

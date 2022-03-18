@@ -46,7 +46,7 @@ impl WindowHandler for MyWindowHandler
     }
 }
 
-mod uxn;
+pub mod uxn;
 
 pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
     let rom = match File::open(config.rom.as_path()) {

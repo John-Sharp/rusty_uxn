@@ -301,6 +301,7 @@ impl fmt::Display for ParseError {
     }
 }
 
+#[cfg(feature = "asm")]
 impl FromStr for UxnToken {
     type Err = ParseError;
 
