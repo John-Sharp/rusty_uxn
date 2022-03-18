@@ -8,3 +8,15 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.0", features = ["derive"] }
 speedy2d = "1.5.0"
+
+[features]
+emu = []
+asm = []
+
+[[bin]]
+name = "uxnemu"
+required-features= ["emu"]
+
+[[bin]]
+name = "uxnasm"
+required-features= ["asm"]
