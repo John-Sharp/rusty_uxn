@@ -42,35 +42,17 @@ struct OpDescription {
     op_code: OpCode,
     byte: u8,
     token: &'static str,
-    handler: fn(Box<&dyn Uxn>),
+    handler: fn(Box<&mut dyn Uxn>, bool, bool, bool),
 }
 
-fn test_handler(_u: Box<&dyn Uxn>) {
+fn test_handler(_u: Box<&mut dyn Uxn>, _keep: bool, _short: bool, _ret: bool) {
     println!("doing test handler");
 }
 
-fn lit_handler(u: Box<&dyn Uxn>, _keep: bool, short: bool, ret: bool) {
-    // read byte/short from ram
-    let mut a:u16 = u.read_from_ram(u.get_program_counter()).into();
-    u.set_program_counter(u.get_program_counter()+1)
-        
-    if short == true {
-        a = a << 8;
-        a |= u.read_from_ram((u.get_program_counter() + 1).into();
-    }
-    // push onto r stack / w stack (depending on ret)
-    if ret == false {
-
-    } else {
-
-    }
-    // move program counter past byte you've read
-
-
-}
+mod op_handlers;
 
 const OP_LIST: &'static [OpDescription] = &[
-    OpDescription{op_code: OpCode::Brk, byte: 0x00, token: "BRK", handler: test_handler},
+    OpDescription{op_code: OpCode::Brk, byte: 0x00, token: "BRK", handler: op_handlers::lit_handler},
     OpDescription{op_code: OpCode::Inc, byte: 0x01, token: "INC", handler: test_handler},
     OpDescription{op_code: OpCode::Pop, byte: 0x02, token: "POP", handler: test_handler},
     OpDescription{op_code: OpCode::Dup, byte: 0x03, token: "DUP", handler: test_handler},
@@ -145,8 +127,8 @@ impl OpObject {
         return OpObject {keep, ret, short, op_code, handler_index: index}
     }
 
-    pub fn execute(&self, uxn: Box::<&dyn Uxn>) {
-        (OP_LIST[self.handler_index].handler)(uxn);
+    pub fn execute(&self, uxn: Box::<&mut dyn Uxn>) {
+        (OP_LIST[self.handler_index].handler)(uxn, self.keep, self.short, self.ret);
     }
 }
 

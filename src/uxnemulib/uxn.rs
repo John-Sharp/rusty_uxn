@@ -4,8 +4,11 @@ use crate::ops::OpObject;
 
 pub const INIT_VECTOR: u16 = 0x100;
 
-pub struct Uxn {
+pub struct UxnImpl {
     ram: Vec<u8>,
+    program_counter: u16,
+    working_stack: Vec<u8>,
+    return_stack: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -25,15 +28,32 @@ impl fmt::Display for UxnError {
 
 impl Error for UxnError {}
 
-use crate::uxninterface;
+use crate::uxninterface::Uxn;
 
-impl uxninterface::Uxn for Uxn {
+impl Uxn for UxnImpl {
     fn read_from_ram(&self, addr: u16) -> u8 {
-        return self.ram[addr];
+        return self.ram[usize::from(addr)];
+    }
+
+    fn get_program_counter(&self) -> u16 {
+        return self.program_counter;
+    }
+
+    fn set_program_counter(&mut self, addr: u16) {
+        self.program_counter = addr;
+    }
+
+    // TODO check for stack overflow
+    fn push_to_return_stack(&mut self, byte: u8) {
+        self.return_stack.push(byte);
+    }
+
+    fn push_to_working_stack(&mut self, byte: u8) {
+        self.working_stack.push(byte);
     }
 }
 
-impl Uxn {
+impl UxnImpl {
     pub fn new<I>(rom: I) -> Result<Self, UxnError>
     where
         I: Iterator<Item = u8>,
@@ -45,30 +65,32 @@ impl Uxn {
             *ram_loc = val;
         }
 
-        return Ok(Uxn{ram});
+        return Ok(UxnImpl{ram, program_counter:0, working_stack: Vec::new(),
+        return_stack: Vec::new()});
     }
 
-    pub fn run(&self, vector: u16) -> Result<(), UxnError>
+    pub fn run(&mut self, vector: u16) -> Result<(), UxnError>
     {
-        let mut program_counter: usize = vector.into();
+        self.set_program_counter(vector);
         loop {
-            let instr = match self.ram.get(program_counter) {
-                Some(instr) => *instr,
-                None => { return Err(UxnError::InvalidMemoryAccess{address: vector}); }
-            };
+            let instr = self.read_from_ram(self.get_program_counter());
+
+            println!("executing {:x}", instr);
+            println!("rst: {:?}", self.return_stack);
+            println!("wst: {:?}", self.working_stack);
 
             if instr == 0x0 {
                 return Ok(());
             }
 
+            self.set_program_counter(self.get_program_counter() + 1);
+
             // parse instr into OpObject
             let op = OpObject::from_byte(instr);
  
+
             // call its handler
             op.execute(Box::new(self));
-
-            println!("need to execute {:x}", instr);
-            program_counter += 1;
         }
     }
 }

@@ -58,7 +58,7 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
     };
     let rom = BufReader::new(rom).bytes();
     let rom = rom.map(|b| b.unwrap());
-    let uxn = uxn::Uxn::new(rom)?;
+    let mut uxn = uxn::UxnImpl::new(rom)?;
 
     uxn.run(uxn::INIT_VECTOR)?;
 
