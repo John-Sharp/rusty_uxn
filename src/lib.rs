@@ -1,6 +1,4 @@
-#[cfg(feature = "emu")]
 pub mod uxninterface;
-
 pub mod ops;
 
 #[cfg(feature = "asm")]

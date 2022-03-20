@@ -2,7 +2,6 @@ use clap::Parser;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
-use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 

@@ -2,7 +2,6 @@ use crate::uxnasmlib::asm::prog_state::ProgState;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::ops;
 use crate::ops::OpObject;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -535,6 +534,7 @@ mod tests {
     use super::*;
     use crate::uxnasmlib::asm::prog_state::Label;
     use std::collections::HashMap;
+    use crate::ops;
 
     // test `from_str()` for `LabelRef`; test that each type of label
     // can be correctly parsed

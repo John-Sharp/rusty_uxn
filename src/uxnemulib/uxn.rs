@@ -28,7 +28,7 @@ impl Error for UxnError {}
 use crate::uxninterface;
 
 impl uxninterface::Uxn for Uxn {
-    fn read_from_ram(&self, addr: u16) -> u8 {
+    fn read_from_ram(&self, _addr: u16) -> u8 {
         return 0xab;
     }
 }

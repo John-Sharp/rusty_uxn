@@ -36,171 +36,61 @@ pub enum OpCode {
     Sft,
 }
 
-#[cfg(feature = "emu")]
 use crate::uxninterface::Uxn;
 
 struct OpDescription {
     op_code: OpCode,
     byte: u8,
     token: &'static str,
-
-    // TODO
-    #[cfg(feature = "emu")]
     handler: fn(Box<&dyn Uxn>),
 }
 
-#[cfg(feature = "emu")]
-fn test_handler(u: Box<&dyn Uxn>) {
+fn test_handler(_u: Box<&dyn Uxn>) {
     println!("doing test handler");
 }
 
 const OP_LIST: &'static [OpDescription] = &[
-    OpDescription{op_code: OpCode::Brk, byte: 0x00, token: "BRK",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Inc, byte: 0x01, token: "INC",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Pop, byte: 0x02, token: "POP",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Dup, byte: 0x03, token: "DUP",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Nip, byte: 0x04, token: "NIP",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Swp, byte: 0x05, token: "SWP",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Ovr, byte: 0x06, token: "OVR",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Rot, byte: 0x07, token: "ROT",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Equ, byte: 0x08, token: "EQU",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Neq, byte: 0x09, token: "NEQ",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Gth, byte: 0x0a, token: "GTH",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Lth, byte: 0x0b, token: "LTH",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Jmp, byte: 0x0c, token: "JMP",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Jcn, byte: 0x0d, token: "JCN",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Jsr, byte: 0x0e, token: "JSR",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Sth, byte: 0x0f, token: "STH",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Ldz, byte: 0x10, token: "LDZ",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Stz, byte: 0x11, token: "STZ",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Ldr, byte: 0x12, token: "LDR",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Str, byte: 0x13, token: "STR",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Lda, byte: 0x14, token: "LDA",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Sta, byte: 0x15, token: "STA",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Dei, byte: 0x16, token: "DEI",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Deo, byte: 0x17, token: "DEO",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Add, byte: 0x18, token: "ADD",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Sub, byte: 0x19, token: "SUB",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Mul, byte: 0x1a, token: "MUL",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Div, byte: 0x1b, token: "DIV",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::And, byte: 0x1c, token: "AND",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Ora, byte: 0x1d, token: "ORA",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Eor, byte: 0x1e, token: "EOR",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
-    OpDescription{op_code: OpCode::Sft, byte: 0x1f, token: "SFT",
-    #[cfg(feature = "emu")]
-        handler: test_handler
-    },
+    OpDescription{op_code: OpCode::Brk, byte: 0x00, token: "BRK", handler: test_handler},
+    OpDescription{op_code: OpCode::Inc, byte: 0x01, token: "INC", handler: test_handler},
+    OpDescription{op_code: OpCode::Pop, byte: 0x02, token: "POP", handler: test_handler},
+    OpDescription{op_code: OpCode::Dup, byte: 0x03, token: "DUP", handler: test_handler},
+    OpDescription{op_code: OpCode::Nip, byte: 0x04, token: "NIP", handler: test_handler},
+    OpDescription{op_code: OpCode::Swp, byte: 0x05, token: "SWP", handler: test_handler},
+    OpDescription{op_code: OpCode::Ovr, byte: 0x06, token: "OVR", handler: test_handler},
+    OpDescription{op_code: OpCode::Rot, byte: 0x07, token: "ROT", handler: test_handler},
+    OpDescription{op_code: OpCode::Equ, byte: 0x08, token: "EQU", handler: test_handler},
+    OpDescription{op_code: OpCode::Neq, byte: 0x09, token: "NEQ", handler: test_handler},
+    OpDescription{op_code: OpCode::Gth, byte: 0x0a, token: "GTH", handler: test_handler},
+    OpDescription{op_code: OpCode::Lth, byte: 0x0b, token: "LTH", handler: test_handler},
+    OpDescription{op_code: OpCode::Jmp, byte: 0x0c, token: "JMP", handler: test_handler},
+    OpDescription{op_code: OpCode::Jcn, byte: 0x0d, token: "JCN", handler: test_handler},
+    OpDescription{op_code: OpCode::Jsr, byte: 0x0e, token: "JSR", handler: test_handler},
+    OpDescription{op_code: OpCode::Sth, byte: 0x0f, token: "STH", handler: test_handler},
+    OpDescription{op_code: OpCode::Ldz, byte: 0x10, token: "LDZ", handler: test_handler},
+    OpDescription{op_code: OpCode::Stz, byte: 0x11, token: "STZ", handler: test_handler},
+    OpDescription{op_code: OpCode::Ldr, byte: 0x12, token: "LDR", handler: test_handler},
+    OpDescription{op_code: OpCode::Str, byte: 0x13, token: "STR", handler: test_handler},
+    OpDescription{op_code: OpCode::Lda, byte: 0x14, token: "LDA", handler: test_handler},
+    OpDescription{op_code: OpCode::Sta, byte: 0x15, token: "STA", handler: test_handler},
+    OpDescription{op_code: OpCode::Dei, byte: 0x16, token: "DEI", handler: test_handler},
+    OpDescription{op_code: OpCode::Deo, byte: 0x17, token: "DEO", handler: test_handler},
+    OpDescription{op_code: OpCode::Add, byte: 0x18, token: "ADD", handler: test_handler},
+    OpDescription{op_code: OpCode::Sub, byte: 0x19, token: "SUB", handler: test_handler},
+    OpDescription{op_code: OpCode::Mul, byte: 0x1a, token: "MUL", handler: test_handler},
+    OpDescription{op_code: OpCode::Div, byte: 0x1b, token: "DIV", handler: test_handler},
+    OpDescription{op_code: OpCode::And, byte: 0x1c, token: "AND", handler: test_handler},
+    OpDescription{op_code: OpCode::Ora, byte: 0x1d, token: "ORA", handler: test_handler},
+    OpDescription{op_code: OpCode::Eor, byte: 0x1e, token: "EOR", handler: test_handler},
+    OpDescription{op_code: OpCode::Sft, byte: 0x1f, token: "SFT", handler: test_handler},
 ];
 
-#[cfg(feature = "asm")]
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpObject {
     keep: bool,
     ret: bool,
     short: bool,
     op_code: OpCode,
-}
-
-#[cfg(feature = "emu")]
-pub struct OpObject {
-    keep: bool,
-    ret: bool,
-    short: bool,
-    op_code: OpCode,
-    handler: fn(Box<& dyn Uxn>),
+    handler_index: usize,
 }
 
 impl OpObject {
@@ -219,7 +109,6 @@ impl OpObject {
         return vec![byte];
     }
 
-    #[cfg(feature = "emu")]
     pub fn from_byte(byte: u8) -> Self {
         let keep: bool = if byte & 0b10000000 > 0 { true } else { false };
         let ret: bool = if byte & 0b01000000 > 0 { true } else { false };
@@ -227,39 +116,33 @@ impl OpObject {
 
         let byte = byte & 0x1f;
 
-        let op_desc = OP_LIST.iter().find(
+        let index = OP_LIST.iter().position(
             |e| e.byte == byte)
             .expect("No matching OP_LIST entry for byte");
 
-        return OpObject {keep, ret, short, op_code: op_desc.op_code,
-        handler: op_desc.handler}
+        let op_code = OP_LIST[index].op_code;
+
+        return OpObject {keep, ret, short, op_code, handler_index: index}
     }
 
-    #[cfg(feature = "emu")]
     pub fn execute(&self, uxn: Box::<&dyn Uxn>) {
-        (self.handler)(uxn);
+        (OP_LIST[self.handler_index].handler)(uxn);
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ParseOpObjectError {}
 
-#[cfg(feature = "emu")]
-fn no_op_handler(u: Box<&dyn Uxn>) {}
-
-fn plain_op_object(op_code: OpCode) -> OpObject {
+fn plain_op_object(op_code: OpCode, handler_index: usize) -> OpObject {
     OpObject{
         keep: false,
         ret: false,
         short: false,
         op_code,
-
-        #[cfg(feature = "emu")]
-        handler: no_op_handler
+        handler_index,
     }
 }
 
-#[cfg(feature = "asm")]
 impl FromStr for OpObject {
     type Err = ParseOpObjectError;
 
@@ -286,6 +169,9 @@ impl FromStr for OpObject {
                     ret: false,
                     short: false,
                     op_code: OpCode::Brk,
+                    handler_index: OP_LIST.iter().position(
+                        |e| e.op_code == OpCode::Brk
+                    ).expect("could not find OpDescription for Brk")
                 }
             }
             "LIT" => OpObject {
@@ -293,12 +179,16 @@ impl FromStr for OpObject {
                 ret: false,
                 short: false,
                 op_code: OpCode::Brk,
+                handler_index: OP_LIST.iter().position(
+                    |e| e.op_code == OpCode::Brk
+                ).expect("could not find OpDescription for Brk")
             },
             _ => {
-                if let Some(op_description) = OP_LIST.iter().find(
+                if let Some(op_description_index) = OP_LIST.iter().position(
                     |e| e.token == opcode
                     ) {
-                    plain_op_object(op_description.op_code)
+                    plain_op_object(OP_LIST[op_description_index].op_code,
+                                    op_description_index)
                 } else {
                     return Err(ParseOpObjectError {})
                 }
@@ -376,6 +266,7 @@ mod tests {
                 ret: false,
                 short: false,
                 op_code: input,
+                handler_index: 0,
             };
 
             let output = input.get_bytes();
@@ -392,6 +283,7 @@ mod tests {
             ret: false,
             short: true,
             op_code: OpCode::Deo,
+            handler_index: 0,
         };
         let expected_output = vec![0xb7];
         let output = input.get_bytes();
@@ -403,6 +295,7 @@ mod tests {
             ret: true,
             short: false,
             op_code: OpCode::Deo,
+            handler_index: 0,
         };
         let expected_output = vec![0xd7];
         let output = input.get_bytes();
@@ -412,42 +305,41 @@ mod tests {
 
     // test `from_str` function for operation
     // strings with no modifier flags
-    #[cfg(feature = "asm")]
     #[test]
     fn test_from_str_happy() {
         let inputs = [
-            ("BRK", OpCode::Brk),
-            ("INC", OpCode::Inc),
-            ("POP", OpCode::Pop),
-            ("DUP", OpCode::Dup),
-            ("NIP", OpCode::Nip),
-            ("SWP", OpCode::Swp),
-            ("OVR", OpCode::Ovr),
-            ("ROT", OpCode::Rot),
-            ("EQU", OpCode::Equ),
-            ("NEQ", OpCode::Neq),
-            ("GTH", OpCode::Gth),
-            ("LTH", OpCode::Lth),
-            ("JMP", OpCode::Jmp),
-            ("JCN", OpCode::Jcn),
-            ("JSR", OpCode::Jsr),
-            ("STH", OpCode::Sth),
-            ("LDZ", OpCode::Ldz),
-            ("STZ", OpCode::Stz),
-            ("LDR", OpCode::Ldr),
-            ("STR", OpCode::Str),
-            ("LDA", OpCode::Lda),
-            ("STA", OpCode::Sta),
-            ("DEI", OpCode::Dei),
-            ("DEO", OpCode::Deo),
-            ("ADD", OpCode::Add),
-            ("SUB", OpCode::Sub),
-            ("MUL", OpCode::Mul),
-            ("DIV", OpCode::Div),
-            ("AND", OpCode::And),
-            ("ORA", OpCode::Ora),
-            ("EOR", OpCode::Eor),
-            ("SFT", OpCode::Sft),
+            ("BRK", (OpCode::Brk, 0)),
+            ("INC", (OpCode::Inc, 1)),
+            ("POP", (OpCode::Pop, 2)),
+            ("DUP", (OpCode::Dup, 3)),
+            ("NIP", (OpCode::Nip, 4)),
+            ("SWP", (OpCode::Swp, 5)),
+            ("OVR", (OpCode::Ovr, 6)),
+            ("ROT", (OpCode::Rot, 7)),
+            ("EQU", (OpCode::Equ, 8)),
+            ("NEQ", (OpCode::Neq, 9)),
+            ("GTH", (OpCode::Gth, 10)),
+            ("LTH", (OpCode::Lth, 11)),
+            ("JMP", (OpCode::Jmp, 12)),
+            ("JCN", (OpCode::Jcn, 13)),
+            ("JSR", (OpCode::Jsr, 14)),
+            ("STH", (OpCode::Sth, 15)),
+            ("LDZ", (OpCode::Ldz, 16)),
+            ("STZ", (OpCode::Stz, 17)),
+            ("LDR", (OpCode::Ldr, 18)),
+            ("STR", (OpCode::Str, 19)),
+            ("LDA", (OpCode::Lda, 20)),
+            ("STA", (OpCode::Sta, 21)),
+            ("DEI", (OpCode::Dei, 22)),
+            ("DEO", (OpCode::Deo, 23)),
+            ("ADD", (OpCode::Add, 24)),
+            ("SUB", (OpCode::Sub, 25)),
+            ("MUL", (OpCode::Mul, 26)),
+            ("DIV", (OpCode::Div, 27)),
+            ("AND", (OpCode::And, 28)),
+            ("ORA", (OpCode::Ora, 29)),
+            ("EOR", (OpCode::Eor, 30)),
+            ("SFT", (OpCode::Sft, 31)),
         ];
 
         for (input, expected_output) in inputs {
@@ -456,7 +348,8 @@ mod tests {
                 keep: false,
                 ret: false,
                 short: false,
-                op_code: expected_output,
+                op_code: expected_output.0,
+                handler_index: expected_output.1,
             });
 
             assert_eq!(output, expected_output);
@@ -465,7 +358,6 @@ mod tests {
 
     // test `from_str` function for LIT operation
     // string with no modifier flags
-    #[cfg(feature = "asm")]
     #[test]
     fn test_from_str_happy_lit() {
         let output = "LIT".parse::<OpObject>();
@@ -474,12 +366,12 @@ mod tests {
             ret: false,
             short: false,
             op_code: OpCode::Brk,
+            handler_index: 0,
         });
 
         assert_eq!(output, expected_output);
     }
 
-    #[cfg(feature = "asm")]
     #[test]
     fn test_from_str_happy_mode_flags() {
         let input = "DEO2rk";
@@ -488,6 +380,7 @@ mod tests {
             ret: true,
             short: true,
             op_code: OpCode::Deo,
+            handler_index: 23,
         });
 
         let output = input.parse::<OpObject>();
@@ -499,6 +392,7 @@ mod tests {
             ret: true,
             short: true,
             op_code: OpCode::Deo,
+            handler_index: 23,
         });
 
         let output = input.parse::<OpObject>();
@@ -510,13 +404,13 @@ mod tests {
             ret: true,
             short: true,
             op_code: OpCode::Deo,
+            handler_index: 23,
         });
 
         let output = input.parse::<OpObject>();
         assert_eq!(output, expected_output);
     }
 
-    #[cfg(feature = "asm")]
     #[test]
     fn test_from_str_forbidden_mode_flags() {
         let inputs = ["BRKr", "BRKk", "BRK2", "LITk"];
@@ -527,7 +421,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "asm")]
     #[test]
     fn test_from_str_unrecognised_op_string() {
         let inputs = ["BRKK", "BOK", "BK"];
