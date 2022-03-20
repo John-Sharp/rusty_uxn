@@ -49,6 +49,26 @@ fn test_handler(_u: Box<&dyn Uxn>) {
     println!("doing test handler");
 }
 
+fn lit_handler(u: Box<&dyn Uxn>, _keep: bool, short: bool, ret: bool) {
+    // read byte/short from ram
+    let mut a:u16 = u.read_from_ram(u.get_program_counter()).into();
+    u.set_program_counter(u.get_program_counter()+1)
+        
+    if short == true {
+        a = a << 8;
+        a |= u.read_from_ram((u.get_program_counter() + 1).into();
+    }
+    // push onto r stack / w stack (depending on ret)
+    if ret == false {
+
+    } else {
+
+    }
+    // move program counter past byte you've read
+
+
+}
+
 const OP_LIST: &'static [OpDescription] = &[
     OpDescription{op_code: OpCode::Brk, byte: 0x00, token: "BRK", handler: test_handler},
     OpDescription{op_code: OpCode::Inc, byte: 0x01, token: "INC", handler: test_handler},
