@@ -37,16 +37,18 @@ pub enum OpCode {
 }
 
 use crate::uxninterface::Uxn;
+use crate::uxninterface::UxnError;
 
 struct OpDescription {
     op_code: OpCode,
     byte: u8,
     token: &'static str,
-    handler: fn(Box<&mut dyn Uxn>, bool, bool, bool),
+    handler: fn(Box<&mut dyn Uxn>, bool, bool, bool) -> Result<(), UxnError>,
 }
 
-fn test_handler(_u: Box<&mut dyn Uxn>, _keep: bool, _short: bool, _ret: bool) {
+fn test_handler(_u: Box<&mut dyn Uxn>, _keep: bool, _short: bool, _ret: bool) -> Result<(), UxnError> {
     println!("doing test handler");
+    return Ok(());
 }
 
 mod op_handlers;
@@ -127,8 +129,8 @@ impl OpObject {
         return OpObject {keep, ret, short, op_code, handler_index: index}
     }
 
-    pub fn execute(&self, uxn: Box::<&mut dyn Uxn>) {
-        (OP_LIST[self.handler_index].handler)(uxn, self.keep, self.short, self.ret);
+    pub fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
+        (OP_LIST[self.handler_index].handler)(uxn, self.keep, self.short, self.ret)
     }
 }
 

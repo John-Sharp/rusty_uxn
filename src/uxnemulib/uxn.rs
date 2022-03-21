@@ -1,46 +1,47 @@
-use std::fmt;
-use std::error::Error;
 use crate::ops::OpObject;
 
 pub const INIT_VECTOR: u16 = 0x100;
 
 pub struct UxnImpl {
     ram: Vec<u8>,
-    program_counter: u16,
+    program_counter: Result<u16, ()>,
     working_stack: Vec<u8>,
     return_stack: Vec<u8>,
 }
 
-#[derive(Debug)]
-pub enum UxnError {
-    InvalidMemoryAccess{address: u16},
-}
-
-impl fmt::Display for UxnError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UxnError::InvalidMemoryAccess{address} => {
-                write!(f, "attempt to access invalid memory address: {:x}", address)
-            }
-        }
-    }
-}
-
-impl Error for UxnError {}
-
 use crate::uxninterface::Uxn;
+use crate::uxninterface::UxnError;
 
 impl Uxn for UxnImpl {
+    fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
+        if self.program_counter.is_err() {
+            return Err(UxnError::OutOfRangeMemoryAddress);
+        }
+        let program_counter = self.program_counter.unwrap();
+        let ret = self.ram[usize::from(program_counter)];
+
+        if program_counter == u16::MAX {
+            self.program_counter = Err(());
+        } else {
+            self.program_counter = Ok(program_counter+1);
+        }
+
+        return Ok(ret);
+    }
+
     fn read_from_ram(&self, addr: u16) -> u8 {
         return self.ram[usize::from(addr)];
     }
 
-    fn get_program_counter(&self) -> u16 {
-        return self.program_counter;
+    fn get_program_counter(&self) -> Result<u16, UxnError> {
+        if self.program_counter.is_err() {
+            return Err(UxnError::OutOfRangeMemoryAddress);    
+        }
+        return Ok(self.program_counter.unwrap());
     }
 
     fn set_program_counter(&mut self, addr: u16) {
-        self.program_counter = addr;
+        self.program_counter = Ok(addr);
     }
 
     // TODO check for stack overflow
@@ -65,7 +66,7 @@ impl UxnImpl {
             *ram_loc = val;
         }
 
-        return Ok(UxnImpl{ram, program_counter:0, working_stack: Vec::new(),
+        return Ok(UxnImpl{ram, program_counter:Ok(0), working_stack: Vec::new(),
         return_stack: Vec::new()});
     }
 
@@ -73,24 +74,23 @@ impl UxnImpl {
     {
         self.set_program_counter(vector);
         loop {
-            let instr = self.read_from_ram(self.get_program_counter());
+            let instr = self.read_next_byte_from_ram()?;
 
             println!("executing {:x}", instr);
-            println!("rst: {:?}", self.return_stack);
-            println!("wst: {:?}", self.working_stack);
 
             if instr == 0x0 {
                 return Ok(());
             }
-
-            self.set_program_counter(self.get_program_counter() + 1);
 
             // parse instr into OpObject
             let op = OpObject::from_byte(instr);
  
 
             // call its handler
-            op.execute(Box::new(self));
+            op.execute(Box::new(self))?;
+
+            println!("rst: {:?}", self.return_stack);
+            println!("wst: {:?}", self.working_stack);
         }
     }
 }
