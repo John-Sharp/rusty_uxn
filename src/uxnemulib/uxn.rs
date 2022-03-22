@@ -1,4 +1,7 @@
+#[cfg(not(test))]
 use crate::ops::OpObject;
+#[cfg(test)]
+use tests::MockOpObject as OpObject;
 
 pub const INIT_VECTOR: u16 = 0x100;
 
@@ -82,6 +85,8 @@ impl UxnImpl {
                 return Ok(());
             }
 
+            // TODO have this made from an op factory, that can
+            // be changed in the tests
             // parse instr into OpObject
             let op = OpObject::from_byte(instr);
  
@@ -92,5 +97,54 @@ impl UxnImpl {
             println!("rst: {:?}", self.return_stack);
             println!("wst: {:?}", self.working_stack);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn no_op_execute(_u: Box<&mut dyn Uxn>) -> Result<(), UxnError> {
+        return Ok(());
+    }
+    static mock_execute_fn: fn(Box<&mut dyn Uxn>) -> Result<(), UxnError> = no_op_execute;
+
+    fn default_from_byte_fn(instr: u8) -> MockOpObject {
+        MockOpObject{}
+    }
+    static mock_from_byte_fn: fn(instr: u8) -> MockOpObject = default_from_byte_fn;
+
+    pub struct MockOpObject {}
+    impl MockOpObject {
+        pub fn from_byte(instr: u8) -> Self {
+            return mock_from_byte_fn(instr);
+        }
+
+        pub fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
+            mock_execute_fn(uxn)
+        }
+    }
+
+    // test creating a UxnImpl and calling its run method with a typical
+    // starting vector. Verify works as expected
+    #[test]
+    fn test_run_basic() -> Result<(), UxnError> {
+        let rom : Vec<u8> = vec!(0xaa, 0xbb, 0xcc, 0xdd);
+
+        // let mut bytes_recvd = Vec::new();
+        // mock_from_byte_fn = |i| { 
+        //     bytes_recvd.push(i);
+        //     default_from_byte_fn(i)
+        // }
+
+
+        let mut uxn = UxnImpl::new(rom.into_iter())?;
+        uxn.run(0x102)?;
+        Ok(())
+    }
+
+    // test calling UxnImpl::run with a ram configuration that reads right
+    // to the end of the address space, verify that Ok is returned
+    fn test_run_ram_full() {
     }
 }
