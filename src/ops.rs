@@ -88,6 +88,17 @@ const OP_LIST: &'static [OpDescription] = &[
     OpDescription{op_code: OpCode::Sft, byte: 0x1f, token: "SFT", handler: test_handler},
 ];
 
+use crate::instruction::Instruction;
+use crate::instruction::InstructionFactory;
+
+pub struct OpObjectFactory {}
+
+impl InstructionFactory for OpObjectFactory {
+    fn from_byte(&self, byte: u8) -> Box<dyn Instruction> {
+        return Box::new(OpObject::from_byte(byte));
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct OpObject {
     keep: bool,
@@ -95,6 +106,12 @@ pub struct OpObject {
     short: bool,
     op_code: OpCode,
     handler_index: usize,
+}
+
+impl Instruction for OpObject {
+    fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
+        (OP_LIST[self.handler_index].handler)(uxn, self.keep, self.short, self.ret)
+    }
 }
 
 impl OpObject {
@@ -127,10 +144,6 @@ impl OpObject {
         let op_code = OP_LIST[index].op_code;
 
         return OpObject {keep, ret, short, op_code, handler_index: index}
-    }
-
-    pub fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
-        (OP_LIST[self.handler_index].handler)(uxn, self.keep, self.short, self.ret)
     }
 }
 

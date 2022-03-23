@@ -1,21 +1,27 @@
-#[cfg(not(test))]
 use crate::ops::OpObject;
-#[cfg(test)]
-use tests::MockOpObject as OpObject;
+
+use crate::instruction::Instruction;
+use crate::instruction::InstructionFactory;
 
 pub const INIT_VECTOR: u16 = 0x100;
 
-pub struct UxnImpl {
+pub struct UxnImpl<J> 
+   where J: InstructionFactory, 
+{
     ram: Vec<u8>,
     program_counter: Result<u16, ()>,
     working_stack: Vec<u8>,
     return_stack: Vec<u8>,
+    instruction_factory: J
 }
 
 use crate::uxninterface::Uxn;
 use crate::uxninterface::UxnError;
 
-impl Uxn for UxnImpl {
+impl<J> Uxn for UxnImpl<J>
+where
+J: InstructionFactory
+{
     fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
         if self.program_counter.is_err() {
             return Err(UxnError::OutOfRangeMemoryAddress);
@@ -57,10 +63,14 @@ impl Uxn for UxnImpl {
     }
 }
 
-impl UxnImpl {
-    pub fn new<I>(rom: I) -> Result<Self, UxnError>
+impl<J> UxnImpl<J> 
+where
+J: InstructionFactory
+{
+    pub fn new<I>(rom: I, instruction_factory: J) -> Result<Self, UxnError>
     where
         I: Iterator<Item = u8>,
+        J: InstructionFactory,
     {
         let mut ram = vec![0x0; 0x10000];
 
@@ -70,14 +80,18 @@ impl UxnImpl {
         }
 
         return Ok(UxnImpl{ram, program_counter:Ok(0), working_stack: Vec::new(),
-        return_stack: Vec::new()});
+        return_stack: Vec::new(), instruction_factory});
     }
 
     pub fn run(&mut self, vector: u16) -> Result<(), UxnError>
     {
         self.set_program_counter(vector);
         loop {
-            let instr = self.read_next_byte_from_ram()?;
+            let instr = self.read_next_byte_from_ram();
+            if instr == Err(UxnError::OutOfRangeMemoryAddress) {
+                return Ok(());
+            }
+            let instr = instr.unwrap();
 
             println!("executing {:x}", instr);
 
@@ -85,11 +99,8 @@ impl UxnImpl {
                 return Ok(());
             }
 
-            // TODO have this made from an op factory, that can
-            // be changed in the tests
-            // parse instr into OpObject
-            let op = OpObject::from_byte(instr);
- 
+            // get the operation that the instruction represents
+            let op = self.instruction_factory.from_byte(instr);
 
             // call its handler
             op.execute(Box::new(self))?;
@@ -103,25 +114,31 @@ impl UxnImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::rc::Rc;
+    use std::cell::RefCell;
 
-    fn no_op_execute(_u: Box<&mut dyn Uxn>) -> Result<(), UxnError> {
-        return Ok(());
+    struct MockInstruction {
+        byte: u8,
+        ret_vec: Rc<RefCell<Vec<u8>>>,
     }
-    static mock_execute_fn: fn(Box<&mut dyn Uxn>) -> Result<(), UxnError> = no_op_execute;
-
-    fn default_from_byte_fn(instr: u8) -> MockOpObject {
-        MockOpObject{}
-    }
-    static mock_from_byte_fn: fn(instr: u8) -> MockOpObject = default_from_byte_fn;
-
-    pub struct MockOpObject {}
-    impl MockOpObject {
-        pub fn from_byte(instr: u8) -> Self {
-            return mock_from_byte_fn(instr);
+    impl Instruction for MockInstruction {
+        fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
+            self.ret_vec.borrow_mut().push(self.byte);
+            Ok(())
         }
+    }
 
-        pub fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
-            mock_execute_fn(uxn)
+    struct MockInstructionFactory {
+        ret_vec : Rc<RefCell<Vec<u8>>>,
+    }
+    impl MockInstructionFactory {
+        fn new() -> Self {
+            MockInstructionFactory{ret_vec: Rc::new(RefCell::new(Vec::<u8>::new())),}
+        }
+    }
+    impl InstructionFactory for MockInstructionFactory {
+        fn from_byte(&self, byte: u8) -> Box<dyn Instruction> {
+            return Box::new(MockInstruction{byte: byte, ret_vec: Rc::clone(&self.ret_vec)});
         }
     }
 
@@ -131,20 +148,31 @@ mod tests {
     fn test_run_basic() -> Result<(), UxnError> {
         let rom : Vec<u8> = vec!(0xaa, 0xbb, 0xcc, 0xdd);
 
-        // let mut bytes_recvd = Vec::new();
-        // mock_from_byte_fn = |i| { 
-        //     bytes_recvd.push(i);
-        //     default_from_byte_fn(i)
-        // }
-
-
-        let mut uxn = UxnImpl::new(rom.into_iter())?;
+        let mut uxn = UxnImpl::new(
+            rom.into_iter(),
+            MockInstructionFactory::new())?;
         uxn.run(0x102)?;
+
+        assert_eq!(vec!(0xcc, 0xdd), *uxn.instruction_factory.ret_vec.borrow());
         Ok(())
     }
 
     // test calling UxnImpl::run with a ram configuration that reads right
     // to the end of the address space, verify that Ok is returned
-    fn test_run_ram_full() {
+    #[test]
+    fn test_run_ram_full() -> Result<(), UxnError> {
+        // note that this rom is larger than the portion of ram it is copied to,
+        // it will just be truncated
+        let rom : Vec<u8> = vec!(0xaa; (0x10000));
+
+        let mut uxn = UxnImpl::new(
+            rom.into_iter(),
+            MockInstructionFactory::new())?;
+        uxn.run(0xfffd)?;
+
+        // the instructions at addresses 0xfffd, 0xfffe, 0xffff should have been
+        // executed
+        assert_eq!(vec!(0xaa, 0xaa, 0xaa), *uxn.instruction_factory.ret_vec.borrow());
+        Ok(())
     }
 }

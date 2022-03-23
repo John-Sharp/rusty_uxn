@@ -10,6 +10,8 @@ use speedy2d::window::{WindowHandler, WindowHelper};
 use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 
+use crate::ops::OpObjectFactory;
+
 /// A rust implementation of the uxn virtual machine
 #[derive(Parser)]
 pub struct Cli {
@@ -58,7 +60,9 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
     };
     let rom = BufReader::new(rom).bytes();
     let rom = rom.map(|b| b.unwrap());
-    let mut uxn = uxn::UxnImpl::new(rom)?;
+    let instruction_factory_impl = OpObjectFactory{};
+
+    let mut uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
 
     uxn.run(uxn::INIT_VECTOR)?;
 

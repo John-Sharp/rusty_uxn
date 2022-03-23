@@ -1,4 +1,5 @@
 pub mod uxninterface;
+pub mod instruction;
 pub mod ops;
 
 #[cfg(feature = "asm")]
