@@ -1,27 +1,58 @@
 use crate::uxninterface::Uxn;
 use crate::uxninterface::UxnError;
 
-pub fn lit_handler(u: Box<&mut dyn Uxn>, _keep: bool, short: bool, ret: bool) -> Result<(), UxnError> {
+// get function pointers that push/pop/peek from the correct Uxn stacks depending on which mode
+// flags are present
+fn get_helper_fns<T: Uxn + ?Sized>(keep: bool, ret: bool) -> (fn(&mut T, u8),) {
+    let push = if ret == false {
+        Uxn::push_to_working_stack
+    } else {
+        Uxn::push_to_return_stack
+    };
+
+    let pop = if ret == false {
+        if keep {
+            Uxn::peek_at_working_stack
+        } else {
+            Uxn::pop_from_working_stack
+        }
+    } else {
+        if keep {
+            Uxn::peek_at_return_stack
+        } else {
+            Uxn::pop_from_return_stack
+        }
+    }
+
+    return (push, pop);
+}
+
+pub fn lit_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> Result<(), UxnError> {
+    let (push, _) = get_helper_fns(keep, ret); 
+
     // read byte/short from ram
     let a = u.read_next_byte_from_ram()?;
-    if ret == false {
-        u.push_to_working_stack(a);
-    } else {
-        u.push_to_return_stack(a);
-    }
+
+    push(*u, a);
 
     if short == false {
         return Ok(());
     }
         
     let a = u.read_next_byte_from_ram()?;
-    if ret == false {
-        u.push_to_working_stack(a);
-    } else {
-        u.push_to_return_stack(a);
-    }
+    push(*u, a);
 
     return Ok(());
+}
+
+pub fn deo_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> Result<(), UxnError> {
+    let (_, pop) = get_helper_fns(keep, ret); 
+
+    let device_address = pop(*u);
+
+    // pop byte/short from working/return stack
+
+    // write byte/short to device responsible for device address
 }
 
 #[cfg(test)]
@@ -65,6 +96,38 @@ mod tests {
     
         fn push_to_working_stack(&mut self, byte: u8) {
             self.working_stack.borrow_mut().push_back(byte);
+        }
+        
+        fn peek_at_working_stack(&mut self) -> Result<u8, UxnError> {
+            let last = self.working_stack.borrow().last();
+            if last.is_none() {
+                return Err(UxnError::StackUnderflow);
+            }
+            return Ok(last.unwrap());
+        }
+
+        fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
+            let last = self.working_stack.borrow().pop();
+            if last.is_none() {
+                return Err(UxnError::StackUnderflow);
+            }
+            return Ok(last.unwrap());
+        }
+
+        fn peek_at_return_stack(&mut self) -> Result<u8, UxnError> {
+            let last = self.return_stack.borrow().last();
+            if last.is_none() {
+                return Err(UxnError::StackUnderflow);
+            }
+            return Ok(last.unwrap());
+        }
+
+        fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
+            let last = self.return_stack.borrow().pop();
+            if last.is_none() {
+                return Err(UxnError::StackUnderflow);
+            }
+            return Ok(last.unwrap());
         }
     }
 

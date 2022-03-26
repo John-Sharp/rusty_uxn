@@ -4,6 +4,7 @@ use std::error::Error;
 #[derive(Debug, PartialEq)]
 pub enum UxnError {
     OutOfRangeMemoryAddress,
+    StackUnderflow,
 }
 
 impl fmt::Display for UxnError {
@@ -26,4 +27,8 @@ pub trait Uxn {
     fn set_program_counter(&mut self, addr: u16);
     fn push_to_return_stack(&mut self, byte: u8);
     fn push_to_working_stack(&mut self, byte: u8);
+    fn peek_at_working_stack(&mut self) -> Result<u8, UxnError>;
+    fn pop_from_working_stack(&mut self) -> Result<u8, UxnError>;
+    fn peek_at_return_stack(&mut self) -> Result<u8, UxnError>;
+    fn pop_from_return_stack(&mut self) -> Result<u8, UxnError>;
 }
