@@ -12,7 +12,10 @@ impl fmt::Display for UxnError {
         match self {
             UxnError::OutOfRangeMemoryAddress => {
                 write!(f, "attempt to access out of range memory address")
-            }
+            },
+            UxnError::StackUnderflow => {
+                write!(f, "stack underflow encountered")
+            },
         }
     }
 }
@@ -31,4 +34,5 @@ pub trait Uxn {
     fn pop_from_working_stack(&mut self) -> Result<u8, UxnError>;
     fn peek_at_return_stack(&mut self) -> Result<u8, UxnError>;
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError>;
+    fn write_to_device(&mut self, device_address: u8, val: u8);
 }
