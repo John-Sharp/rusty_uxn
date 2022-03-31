@@ -71,10 +71,10 @@ mod tests {
         read_from_ram_values_to_return: RefCell<VecDeque<u8>>,
 
         get_program_counter_arguments_received: RefCell<VecDeque<()>>,
-        get_program_counter_values_to_return: RefCell<VecDeque<u16, UxnError>>,
+        get_program_counter_values_to_return: RefCell<VecDeque<Result<u16, UxnError>>>,
 
-        get_prog_counter_ret_values: RefCell<VecDeque<Result<u16, UxnError>>>,
-        prog_counter_recv_values: RefCell<VecDeque<u16>>,
+        get_program_counter_arguments_received: RefCell<VecDeque<(u16)>>,
+
         working_stack: RefCell<VecDeque<u8>>,
         return_stack: RefCell<VecDeque<u8>>,
         write_to_device_arguments_received: RefCell<VecDeque<(u8, u8)>>,
@@ -95,12 +95,15 @@ mod tests {
         }
     
         fn get_program_counter(&self) -> Result<u16, UxnError> {
-            return self.get_prog_counter_ret_values.borrow_mut()
+            self.get_program_counter_arguments_received
+                .borrow_mut().push_back(());
+            return self.get_program_counter_values_to_return.borrow_mut()
                 .pop_front().unwrap();
         }
     
         fn set_program_counter(&mut self, addr: u16) {
-            self.prog_counter_recv_values.borrow_mut().push_back(addr);
+            self.set_program_counter_arguments_received
+                .borrow_mut().push_back((addr,));
         }
     
         fn push_to_return_stack(&mut self, byte: u8) {
@@ -159,8 +162,9 @@ mod tests {
             read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
             read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
 
-            get_prog_counter_ret_values: RefCell::new(VecDeque::new()),
-            prog_counter_recv_values: RefCell::new(VecDeque::new()),
+            get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
+            get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
+
             working_stack: RefCell::new(VecDeque::new()),
             return_stack: RefCell::new(VecDeque::new()),
 
@@ -186,8 +190,9 @@ mod tests {
             read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
             read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
 
-            get_prog_counter_ret_values: RefCell::new(VecDeque::new()),
-            prog_counter_recv_values: RefCell::new(VecDeque::new()),
+            get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
+            get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
+
             working_stack: RefCell::new(VecDeque::new()),
             return_stack: RefCell::new(VecDeque::new()),
 
@@ -214,8 +219,9 @@ mod tests {
             read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
             read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
 
-            get_prog_counter_ret_values: RefCell::new(VecDeque::new()),
-            prog_counter_recv_values: RefCell::new(VecDeque::new()),
+            get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
+            get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
+
             working_stack: RefCell::new(VecDeque::new()),
             return_stack: RefCell::new(VecDeque::new()),
 
