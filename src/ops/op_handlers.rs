@@ -73,11 +73,61 @@ mod tests {
         get_program_counter_arguments_received: RefCell<VecDeque<()>>,
         get_program_counter_values_to_return: RefCell<VecDeque<Result<u16, UxnError>>>,
 
-        get_program_counter_arguments_received: RefCell<VecDeque<(u16)>>,
+        set_program_counter_arguments_received: RefCell<VecDeque<(u16,)>>,
 
-        working_stack: RefCell<VecDeque<u8>>,
-        return_stack: RefCell<VecDeque<u8>>,
+        push_to_return_stack_arguments_received: RefCell<VecDeque<(u8,)>>,
+
+        push_to_working_stack_arguments_received: RefCell<VecDeque<(u8,)>>,
+
+        peek_at_working_stack_arguments_received: RefCell<VecDeque<()>>,
+        peek_at_working_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
+
+        pop_from_working_stack_arguments_received: RefCell<VecDeque<()>>,
+        pop_from_working_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
+
+        peek_at_return_stack_arguments_received: RefCell<VecDeque<()>>,
+        peek_at_return_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
+
+        pop_from_return_stack_arguments_received: RefCell<VecDeque<()>>,
+        pop_from_return_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
+
         write_to_device_arguments_received: RefCell<VecDeque<(u8, u8)>>,
+    }
+
+    impl MockUxn {
+        fn new() -> Self {
+            MockUxn{
+                read_next_byte_from_ram_arguments_received: RefCell::new(VecDeque::new()),
+                read_next_byte_from_ram_values_to_return: RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab),])),
+
+                read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
+                read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
+
+                get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
+                get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
+
+                set_program_counter_arguments_received: RefCell::new(VecDeque::new()),
+
+                push_to_return_stack_arguments_received: RefCell::new(VecDeque::new()),
+
+                push_to_working_stack_arguments_received: RefCell::new(VecDeque::new()), 
+
+                peek_at_working_stack_arguments_received: RefCell::new(VecDeque::new()),
+                peek_at_working_stack_values_to_return: RefCell::new(VecDeque::new()),
+
+                pop_from_working_stack_arguments_received: RefCell::new(VecDeque::new()),
+                pop_from_working_stack_values_to_return: RefCell::new(VecDeque::new()),
+
+                peek_at_return_stack_arguments_received: RefCell::new(VecDeque::new()),
+                peek_at_return_stack_values_to_return: RefCell::new(VecDeque::new()),
+
+                pop_from_return_stack_arguments_received: RefCell::new(VecDeque::new()),
+                pop_from_return_stack_values_to_return: RefCell::new(VecDeque::new()),
+
+                write_to_device_arguments_received: RefCell::new(VecDeque::new()),
+            }
+        }
+
     }
 
     impl Uxn for MockUxn {
@@ -107,45 +157,41 @@ mod tests {
         }
     
         fn push_to_return_stack(&mut self, byte: u8) {
-            self.return_stack.borrow_mut().push_back(byte);
+            self.push_to_return_stack_arguments_received
+                .borrow_mut().push_back((byte,));
         }
     
         fn push_to_working_stack(&mut self, byte: u8) {
-            self.working_stack.borrow_mut().push_back(byte);
+            self.push_to_working_stack_arguments_received
+                .borrow_mut().push_back((byte,));
         }
         
         fn peek_at_working_stack(&mut self) -> Result<u8, UxnError> {
-            let working_stack_b = self.working_stack.borrow();
-            let last = working_stack_b.iter().last();
-            if last.is_none() {
-                return Err(UxnError::StackUnderflow);
-            }
-            return Ok(*last.unwrap());
+            self.peek_at_working_stack_arguments_received
+                .borrow_mut().push_back(());
+            return self.peek_at_working_stack_values_to_return.borrow_mut()
+                .pop_front().unwrap();
         }
 
         fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
-            let last = self.working_stack.borrow_mut().pop_back();
-            if last.is_none() {
-                return Err(UxnError::StackUnderflow);
-            }
-            return Ok(last.unwrap());
+            self.pop_from_working_stack_arguments_received
+                .borrow_mut().push_back(());
+            return self.pop_from_working_stack_values_to_return.borrow_mut()
+                .pop_front().unwrap();
         }
 
         fn peek_at_return_stack(&mut self) -> Result<u8, UxnError> {
-            let return_stack_b = self.return_stack.borrow();
-            let last = return_stack_b.iter().last();
-            if last.is_none() {
-                return Err(UxnError::StackUnderflow);
-            }
-            return Ok(*last.unwrap());
+            self.peek_at_return_stack_arguments_received
+                .borrow_mut().push_back(());
+            return self.peek_at_return_stack_values_to_return.borrow_mut()
+                .pop_front().unwrap();
         }
 
         fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
-            let last = self.return_stack.borrow_mut().pop_back();
-            if last.is_none() {
-                return Err(UxnError::StackUnderflow);
-            }
-            return Ok(last.unwrap());
+            self.pop_from_return_stack_arguments_received
+                .borrow_mut().push_back(());
+            return self.pop_from_return_stack_values_to_return.borrow_mut()
+                .pop_front().unwrap();
         }
 
         fn write_to_device(&mut self, device_address: u8, val: u8) {
@@ -155,88 +201,54 @@ mod tests {
 
     #[test]
     fn test_lit_handler() {
-        let mut mock_uxn = MockUxn{
-            read_next_byte_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-            read_next_byte_from_ram_values_to_return: RefCell::new(VecDeque::from([Ok(0xaa),])),
-
-            read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-            read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
-
-            get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
-            get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
-
-            working_stack: RefCell::new(VecDeque::new()),
-            return_stack: RefCell::new(VecDeque::new()),
-
-            write_to_device_arguments_received: RefCell::new(VecDeque::new()),
-        };
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.read_next_byte_from_ram_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa),]));
 
         lit_handler(Box::new(&mut mock_uxn),
             false, false, false).unwrap();
 
         assert_eq!(mock_uxn.read_next_byte_from_ram_arguments_received.into_inner(),
             VecDeque::from([(),]));
-        assert_eq!(mock_uxn.working_stack.into_inner(),
-        VecDeque::from([0xaa,]));
-        assert_eq!(mock_uxn.return_stack.into_inner(), VecDeque::new());
+        assert_eq!(mock_uxn.push_to_working_stack_arguments_received.into_inner(),
+        VecDeque::from([(0xaa,),]));
+        assert_eq!(mock_uxn.push_to_return_stack_arguments_received.into_inner(),
+        VecDeque::new());
     }
 
     #[test]
     fn test_lit_handler_short_mode() {
-        let mut mock_uxn = MockUxn{
-            read_next_byte_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-            read_next_byte_from_ram_values_to_return: RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab),])),
+        let mut mock_uxn = MockUxn::new();
 
-            read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-            read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
-
-            get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
-            get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
-
-            working_stack: RefCell::new(VecDeque::new()),
-            return_stack: RefCell::new(VecDeque::new()),
-
-            write_to_device_arguments_received: RefCell::new(VecDeque::new()),
-        };
+        mock_uxn.read_next_byte_from_ram_values_to_return = RefCell::new(
+            VecDeque::from([Ok(0xaa), Ok(0xab),]));
 
         lit_handler(Box::new(&mut mock_uxn),
             false, true, false).unwrap();
 
         assert_eq!(mock_uxn.read_next_byte_from_ram_arguments_received.into_inner(),
             VecDeque::from([(),()]));
-        assert_eq!(mock_uxn.working_stack.into_inner(),
-        VecDeque::from([0xaa, 0xab]));
-        assert_eq!(mock_uxn.return_stack.into_inner(),
+        assert_eq!(mock_uxn.push_to_working_stack_arguments_received.into_inner(),
+        VecDeque::from([(0xaa,), (0xab,),]));
+        assert_eq!(mock_uxn.push_to_return_stack_arguments_received.into_inner(),
         VecDeque::new());
     }
 
     #[test]
     fn test_lit_handler_ret_mode() {
-        let mut mock_uxn = MockUxn{
-            read_next_byte_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-            read_next_byte_from_ram_values_to_return: RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab),])),
+        let mut mock_uxn = MockUxn::new();
 
-            read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-            read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
-
-            get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
-            get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
-
-            working_stack: RefCell::new(VecDeque::new()),
-            return_stack: RefCell::new(VecDeque::new()),
-
-            write_to_device_arguments_received: RefCell::new(VecDeque::new()),
-        };
+        mock_uxn.read_next_byte_from_ram_values_to_return = RefCell::new(
+            VecDeque::from([Ok(0xaa),]));
 
         lit_handler(Box::new(&mut mock_uxn),
             false, false, true).unwrap();
 
         assert_eq!(mock_uxn.read_next_byte_from_ram_arguments_received.into_inner(),
             VecDeque::from([(),]));
-        assert_eq!(mock_uxn.return_stack.into_inner(),
-        VecDeque::from([0xaa,]));
-        assert_eq!(mock_uxn.working_stack.into_inner(),
+        assert_eq!(mock_uxn.push_to_working_stack_arguments_received.into_inner(),
         VecDeque::new());
+        assert_eq!(mock_uxn.push_to_return_stack_arguments_received.into_inner(),
+        VecDeque::from([(0xaa,),]));
     }
 
     // #[test]

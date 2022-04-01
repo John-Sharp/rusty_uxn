@@ -61,6 +61,26 @@ J: InstructionFactory
     fn push_to_working_stack(&mut self, byte: u8) {
         self.working_stack.push(byte);
     }
+
+    fn peek_at_working_stack(&mut self) -> Result<u8, UxnError> {
+        panic!("TODO");
+    }
+
+    fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
+        panic!("TODO");
+    }
+
+    fn peek_at_return_stack(&mut self) -> Result<u8, UxnError> {
+        panic!("TODO");
+    }
+
+    fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
+        panic!("TODO");
+    }
+
+    fn write_to_device(&mut self, device_address: u8, val: u8) {
+        panic!("TODO");
+    }
 }
 
 impl<J> UxnImpl<J> 
