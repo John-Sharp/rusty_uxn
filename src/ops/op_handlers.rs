@@ -1,4 +1,4 @@
-use crate::uxninterface::Uxn;
+use cratpe::uxninterface::Uxn;
 use crate::uxninterface::UxnError;
 
 // get function pointers that push/pop/peek from the correct Uxn stacks depending on which mode
@@ -48,12 +48,21 @@ pub fn lit_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> 
 pub fn deo_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> Result<(), UxnError> {
     let (_, pop) = get_helper_fns(keep, ret); 
 
-    let device_address = pop(*u);
+    // get device address to write to from working/return stack
+    let device_address = pop(*u)?;
 
-    // pop byte/short from working/return stack
+    // pop byte from working/return stack
+    let value = pop(*u)?;
 
-    // write byte/short to device responsible for device address
+    // write byte to device responsible for device address
+    u.write_to_device(device_address, value);
 
+    // if in short mode get another byte from working/return stack
+    // and write to device
+    if short == true {
+        let value = pop(*u)?;
+        u.write_to_device(device_address, value);
+    }
     return Ok(());
 }
 
@@ -251,30 +260,40 @@ mod tests {
         VecDeque::from([(0xaa,),]));
     }
 
+    #[test]
+    fn test_deo_handler() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(
+            VecDeque::from([
+                           Ok(0xaa), // should be used as device address
+                           Ok(0xba), // should be used as value to write
+            ]));
+
+        deo_handler(Box::new(&mut mock_uxn),
+            false, false, false).unwrap();
+
+        assert_eq!(mock_uxn.pop_from_working_stack_arguments_received.into_inner(),
+            VecDeque::from([(), (),]));
+        assert_eq!(mock_uxn.write_to_device_arguments_received.into_inner(),
+            VecDeque::from([(0xaa, 0xba),]));
+    }
+
+    // TODO peek functions need to take position to peek at
     // #[test]
-    // fn test_deo_handler() {
-    //     let mut mock_uxn = MockUxn{
-    //         read_next_byte_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-    //         read_next_byte_from_ram_values_to_return: RefCell::new(VecDeque::from([Ok(0xaa),])),
+    // fn test_deo_handler_keep_mode() {
+    //     let mut mock_uxn = MockUxn::new();
+    //     mock_uxn.peek_at_working_stack_values_to_return = RefCell::new(
+    //         VecDeque::from([
+    //                        Ok(0xaa), // should be used as device address
+    //                        Ok(0xba), // should be used as value to write
+    //         ]));
 
-    //         read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
-    //         read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
+    //     deo_handler(Box::new(&mut mock_uxn),
+    //         true, false, false).unwrap();
 
-    //         get_prog_counter_ret_values: RefCell::new(VecDeque::new()),
-    //         prog_counter_recv_values: RefCell::new(VecDeque::new()),
-    //         working_stack: RefCell::new(VecDeque::new()),
-    //         return_stack: RefCell::new(VecDeque::new()),
-
-    //         write_to_device_arguments_received: RefCell::new(VecDeque::new()),
-    //     };
-
-    //     lit_handler(Box::new(&mut mock_uxn),
-    //         false, false, false).unwrap();
-
-    //     assert_eq!(mock_uxn.read_next_byte_from_ram_arguments_received.into_inner(),
-    //         VecDeque::from([(),]));
-    //     assert_eq!(mock_uxn.working_stack.into_inner(),
-    //     VecDeque::from([0xaa,]));
-    //     assert_eq!(mock_uxn.return_stack.into_inner(), VecDeque::new());
+    //     assert_eq!(mock_uxn.peek_at_working_stack_arguments_received.into_inner(),
+    //         VecDeque::from([(), (),]));
+    //     assert_eq!(mock_uxn.write_to_device_arguments_received.into_inner(),
+    //         VecDeque::from([(0xaa, 0xba),]));
     // }
 }
