@@ -66,8 +66,9 @@ J: InstructionFactory
         panic!("TODO");
     }
 
+    // TODO check for stack underflow
     fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
-        panic!("TODO");
+        Ok(self.working_stack.pop().unwrap())
     }
 
     fn peek_at_return_stack(&mut self) -> Result<u8, UxnError> {
@@ -75,7 +76,7 @@ J: InstructionFactory
     }
 
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
-        panic!("TODO");
+        Ok(self.return_stack.pop().unwrap())
     }
 
     fn write_to_device(&mut self, device_address: u8, val: u8) {
