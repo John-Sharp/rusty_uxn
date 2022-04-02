@@ -3,7 +3,12 @@ use crate::ops::OpObject;
 use crate::instruction::Instruction;
 use crate::instruction::InstructionFactory;
 
+use std::collections::HashMap;
+
 pub const INIT_VECTOR: u16 = 0x100;
+
+pub mod device; 
+use device::Device;
 
 pub struct UxnImpl<J> 
    where J: InstructionFactory, 
@@ -12,7 +17,8 @@ pub struct UxnImpl<J>
     program_counter: Result<u16, ()>,
     working_stack: Vec<u8>,
     return_stack: Vec<u8>,
-    instruction_factory: J
+    instruction_factory: J,
+    devices: HashMap<u8, Box<dyn Device>>,
 }
 
 use crate::uxninterface::Uxn;
@@ -20,7 +26,7 @@ use crate::uxninterface::UxnError;
 
 impl<J> Uxn for UxnImpl<J>
 where
-J: InstructionFactory
+J: InstructionFactory,
 {
     fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
         if self.program_counter.is_err() {
@@ -80,13 +86,26 @@ J: InstructionFactory
     }
 
     fn write_to_device(&mut self, device_address: u8, val: u8) {
-        panic!("TODO");
+        // index of device is first nibble of device address
+        let device_index = device_address >> 4;
+
+        // port is second nibble of device address
+        let device_port = device_address & 0xf;
+
+        // look up correct device using index
+        let device = match self.devices.get_mut(&device_index) {
+            Some(device) => device,
+            None => return, // TODO return unrecognised device error?
+        };
+
+        // pass port and value through to device
+        device.write(device_port, val);
     }
 }
 
 impl<J> UxnImpl<J> 
 where
-J: InstructionFactory
+J: InstructionFactory,
 {
     pub fn new<I>(rom: I, instruction_factory: J) -> Result<Self, UxnError>
     where
@@ -100,8 +119,10 @@ J: InstructionFactory
             *ram_loc = val;
         }
 
+        let devices = HashMap::new();
+
         return Ok(UxnImpl{ram, program_counter:Ok(0), working_stack: Vec::new(),
-        return_stack: Vec::new(), instruction_factory});
+        return_stack: Vec::new(), instruction_factory, devices});
     }
 
     pub fn run(&mut self, vector: u16) -> Result<(), UxnError>
@@ -129,6 +150,12 @@ J: InstructionFactory
             println!("rst: {:?}", self.return_stack);
             println!("wst: {:?}", self.working_stack);
         }
+    }
+
+    pub fn add_device(&mut self, device_index: u8, device: Box<dyn Device>) {
+        self.devices.insert(
+            device_index,
+            device);
     }
 }
 
@@ -162,6 +189,23 @@ mod tests {
             return Box::new(MockInstruction{byte: byte, ret_vec: Rc::clone(&self.ret_vec)});
         }
     }
+    use std::cell::Cell;
+    struct MockDevice {
+        write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>,
+    }
+
+    impl MockDevice {
+        fn new(write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>) -> Self {
+           MockDevice{write_to_device_arguments_received} 
+        }
+    }
+
+    impl Device for MockDevice {
+        fn write(&mut self, port: u8, val: u8) {
+            self.write_to_device_arguments_received.borrow_mut().push((port, val));
+        }
+    }
+
 
     // test creating a UxnImpl and calling its run method with a typical
     // starting vector. Verify works as expected
@@ -194,6 +238,82 @@ mod tests {
         // the instructions at addresses 0xfffd, 0xfffe, 0xffff should have been
         // executed
         assert_eq!(vec!(0xaa, 0xaa, 0xaa), *uxn.instruction_factory.ret_vec.borrow());
+        Ok(())
+    }
+
+    // test that adding a device and then attempting to write to that device leads
+    // to the correct port and value being passed through to the device
+    #[test]
+    fn test_write_to_device() -> Result<(), UxnError> {
+        let rom = Vec::new();
+
+        let mut uxn = UxnImpl::new(
+            rom.into_iter(),
+            MockInstructionFactory::new())?;
+
+        // vector for holding arguments passed to device's write method
+        let write_to_device_arguments_received = Rc::new(RefCell::new(Vec::new()));
+
+        // add the device at index 0x0
+        uxn.add_device(0x0, Box::new(MockDevice::new(write_to_device_arguments_received.clone())));
+
+        // pass value 0x22 to port 0xa of device at index 0x0
+        uxn.write_to_device(0x0a, 0x22);
+
+        // check that write method of device was called with correct port and 
+        // value
+        assert_eq!(vec!((0x0a, 0x22)), *write_to_device_arguments_received.borrow());
+
+        Ok(())
+    }
+
+    // identical to MockDevice, but a different type
+    struct MockDeviceB {
+        write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>,
+    }
+
+    impl MockDeviceB {
+        fn new(write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>) -> Self {
+           MockDeviceB{write_to_device_arguments_received} 
+        }
+    }
+
+    impl Device for MockDeviceB {
+        fn write(&mut self, port: u8, val: u8) {
+            self.write_to_device_arguments_received.borrow_mut().push((port, val));
+        }
+    }
+
+    // test having two devices (of different types) and check writing to them
+    // leads to correct write methods being called
+    #[test]
+    fn test_write_to_devices() -> Result<(), UxnError> {
+        let rom = Vec::new();
+
+        let mut uxn = UxnImpl::new(
+            rom.into_iter(),
+            MockInstructionFactory::new())?;
+
+        // vector for arguments to write method of first device
+        let write_to_device_arguments_received = Rc::new(RefCell::new(Vec::new()));
+
+        // vector for arguments to write method of second device
+        let write_to_device_arguments_received_b = Rc::new(RefCell::new(Vec::new()));
+
+        // add first device (of type MockDevice) at index 0x0
+        uxn.add_device(0x0, Box::new(MockDevice::new(write_to_device_arguments_received.clone())));
+
+        // add second device (of type MockDeviceB) at index 0xb
+        uxn.add_device(0xb, Box::new(MockDeviceB::new(write_to_device_arguments_received_b.clone())));
+
+        // write 0x22 to port 0xa of device with index 0x0, write 0x24 to port 0x1 of device with
+        // index 0xb
+        uxn.write_to_device(0x0a, 0x22);
+        uxn.write_to_device(0xb1, 0x24);
+
+        assert_eq!(vec!((0x0a, 0x22)), *write_to_device_arguments_received.borrow());
+        assert_eq!(vec!((0x01, 0x24)), *write_to_device_arguments_received_b.borrow());
+
         Ok(())
     }
 }
