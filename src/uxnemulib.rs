@@ -11,6 +11,8 @@ use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 
 use crate::ops::OpObjectFactory;
+mod devices;
+use devices::console::Console;
 
 /// A rust implementation of the uxn virtual machine
 #[derive(Parser)]
@@ -63,6 +65,7 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
     let instruction_factory_impl = OpObjectFactory{};
 
     let mut uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
+    uxn.add_device(0x1, Box::new(Console::new()));
 
     uxn.run(uxn::INIT_VECTOR)?;
 

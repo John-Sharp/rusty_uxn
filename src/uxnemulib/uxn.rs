@@ -1,6 +1,3 @@
-use crate::ops::OpObject;
-
-use crate::instruction::Instruction;
 use crate::instruction::InstructionFactory;
 
 use std::collections::HashMap;
@@ -164,13 +161,14 @@ mod tests {
     use super::*;
     use std::rc::Rc;
     use std::cell::RefCell;
+    use crate::instruction::Instruction;
 
     struct MockInstruction {
         byte: u8,
         ret_vec: Rc<RefCell<Vec<u8>>>,
     }
     impl Instruction for MockInstruction {
-        fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
+        fn execute(&self, _uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
             self.ret_vec.borrow_mut().push(self.byte);
             Ok(())
         }
@@ -189,7 +187,6 @@ mod tests {
             return Box::new(MockInstruction{byte: byte, ret_vec: Rc::clone(&self.ret_vec)});
         }
     }
-    use std::cell::Cell;
     struct MockDevice {
         write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>,
     }
@@ -228,7 +225,7 @@ mod tests {
     fn test_run_ram_full() -> Result<(), UxnError> {
         // note that this rom is larger than the portion of ram it is copied to,
         // it will just be truncated
-        let rom : Vec<u8> = vec!(0xaa; (0x10000));
+        let rom : Vec<u8> = vec!(0xaa; 0x10000);
 
         let mut uxn = UxnImpl::new(
             rom.into_iter(),
