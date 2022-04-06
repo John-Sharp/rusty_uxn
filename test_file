@@ -1,5 +1,12 @@
 ( hello.tal )
 
+( devices )
+|10 @Console [ &vector $2 &read $1 &pad $5 &write $1 &error $1 ]
 
-|0100 ff ff ff ff ff ff |0100 bb $02 cc |0110 cc $01 dd
-
+( main program )
+|0100 LIT 'h .Console/write DEO
+      LIT 'e .Console/write DEO
+      LIT 'l .Console/write DEO
+      LIT 'l .Console/write DEO
+      LIT 'o .Console/write DEO
+      #0a .Console/write DEO ( newline )

@@ -132,8 +132,6 @@ J: InstructionFactory,
             }
             let instr = instr.unwrap();
 
-            println!("executing {:x}", instr);
-
             if instr == 0x0 {
                 return Ok(());
             }
@@ -143,9 +141,6 @@ J: InstructionFactory,
 
             // call its handler
             op.execute(Box::new(self))?;
-
-            println!("rst: {:?}", self.return_stack);
-            println!("wst: {:?}", self.working_stack);
         }
     }
 
