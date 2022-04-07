@@ -36,7 +36,12 @@ impl<'a> UxnWrapper<'a> {
         self.uxn.read_next_byte_from_ram()
     }
 
+    fn read_from_ram(&self, addr: u16) -> u8 {
+        self.uxn.read_from_ram(addr)
+    }
+
     fn push(&mut self, byte: u8) {
+        // TODO think should be pushing to 'popped_values' here
         (self.push_fn)(*self.uxn, byte);
     }
 
@@ -102,6 +107,28 @@ pub fn deo_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> 
         let value = wrapper.pop()?;
         wrapper.write_to_device(device_address, value);
     }
+    return Ok(());
+}
+
+// load absolute handler: push value at absolute address to the top of the stack
+pub fn lda_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> Result<(), UxnError> {
+    let mut wrapper = UxnWrapper::new(u, keep, ret);
+
+    // get 16 bit absolute address (first byte on stack provides least significant byte of address,
+    // second byte on stack the most significant)
+    let address = wrapper.pop()? as u16;
+    let address = address + ((wrapper.pop()? as u16) << 8);
+
+    let value = wrapper.read_from_ram(address);
+    wrapper.push(value);
+
+    if short == false {
+        return Ok(());
+    }
+
+    let value = wrapper.read_from_ram(address+1);
+    wrapper.push(value);
+
     return Ok(());
 }
 
@@ -368,5 +395,29 @@ mod tests {
         // is the case
         assert_eq!(mock_uxn.push_to_return_stack_arguments_received.into_inner(),
             VecDeque::from([(0xc1,), (0xba,), (0xaa,),]));
+    }
+
+    #[test]
+    fn test_lda_handler() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(
+            VecDeque::from([
+                           Ok(0xa1), // least significant byte of address to load
+                           Ok(0xb2), // most significant byte
+            ]));
+        mock_uxn.read_from_ram_values_to_return = RefCell::new(
+            VecDeque::from([0xc3,])); // value 'read from ram'
+
+        lda_handler(Box::new(&mut mock_uxn),
+            false, false, false).unwrap();
+
+        // handler should attempt to read from the address constructed out of 
+        // bytes it popped from the stack
+        assert_eq!(mock_uxn.read_from_ram_arguments_received.into_inner(),
+            VecDeque::from([(0xb2a1,)]));
+
+        // handler should then write the value read from ram to the stack
+        assert_eq!(mock_uxn.push_to_working_stack_arguments_received.into_inner(),
+            VecDeque::from([(0xc3,)]));
     }
 }

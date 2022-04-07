@@ -74,7 +74,7 @@ const OP_LIST: &'static [OpDescription] = &[
     OpDescription{op_code: OpCode::Stz, byte: 0x11, token: "STZ", handler: test_handler},
     OpDescription{op_code: OpCode::Ldr, byte: 0x12, token: "LDR", handler: test_handler},
     OpDescription{op_code: OpCode::Str, byte: 0x13, token: "STR", handler: test_handler},
-    OpDescription{op_code: OpCode::Lda, byte: 0x14, token: "LDA", handler: test_handler},
+    OpDescription{op_code: OpCode::Lda, byte: 0x14, token: "LDA", handler: op_handlers::lda_handler},
     OpDescription{op_code: OpCode::Sta, byte: 0x15, token: "STA", handler: test_handler},
     OpDescription{op_code: OpCode::Dei, byte: 0x16, token: "DEI", handler: test_handler},
     OpDescription{op_code: OpCode::Deo, byte: 0x17, token: "DEO", handler: op_handlers::deo_handler},
