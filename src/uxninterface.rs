@@ -5,6 +5,7 @@ use std::error::Error;
 pub enum UxnError {
     OutOfRangeMemoryAddress,
     StackUnderflow,
+    StackOverflow,
 }
 
 impl fmt::Display for UxnError {
@@ -15,6 +16,9 @@ impl fmt::Display for UxnError {
             },
             UxnError::StackUnderflow => {
                 write!(f, "stack underflow encountered")
+            },
+            UxnError::StackOverflow => {
+                write!(f, "stack overflow encountered")
             },
         }
     }
@@ -28,11 +32,9 @@ pub trait Uxn {
     fn read_from_ram(&self, addr: u16) -> u8;
     fn get_program_counter(&self) -> Result<u16, UxnError>;
     fn set_program_counter(&mut self, addr: u16);
-    fn push_to_return_stack(&mut self, byte: u8);
-    fn push_to_working_stack(&mut self, byte: u8);
-    fn peek_at_working_stack(&mut self) -> Result<u8, UxnError>;
+    fn push_to_return_stack(&mut self, byte: u8) -> Result<(), UxnError>;
+    fn push_to_working_stack(&mut self, byte: u8) -> Result<(), UxnError>;
     fn pop_from_working_stack(&mut self) -> Result<u8, UxnError>;
-    fn peek_at_return_stack(&mut self) -> Result<u8, UxnError>;
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError>;
     fn write_to_device(&mut self, device_address: u8, val: u8);
 }

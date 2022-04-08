@@ -3,7 +3,7 @@ use crate::uxninterface::UxnError;
 
 struct UxnWrapper<'a> {
     uxn: Box<&'a mut dyn Uxn>,
-    push_fn: fn(&mut (dyn Uxn + 'a), u8),
+    push_fn: fn(&mut (dyn Uxn + 'a), u8) -> Result<(), UxnError>,
     pop_fn: fn(&mut (dyn Uxn + 'a)) -> Result<u8, UxnError>,
     keep: bool,
     popped_values: Vec<u8>,
@@ -40,7 +40,7 @@ impl<'a> UxnWrapper<'a> {
         self.uxn.read_from_ram(addr)
     }
 
-    fn push(&mut self, byte: u8) {
+    fn push(&mut self, byte: u8) -> Result<(), UxnError> {
         
         // If in keep mode, popped_values will be populated with
         // what has been popped in the course of this operation.
@@ -48,10 +48,10 @@ impl<'a> UxnWrapper<'a> {
         // state prior to any pops before pushing the desired
         // value
         while let Some(val) = self.popped_values.pop() {
-            (self.push_fn)(*self.uxn, val);
+            (self.push_fn)(*self.uxn, val).expect("Couldn't push");
         }
 
-        (self.push_fn)(*self.uxn, byte);
+        (self.push_fn)(*self.uxn, byte)
     }
 
     fn pop(&mut self) -> Result<u8, UxnError> {
@@ -75,7 +75,7 @@ impl<'a> Drop for UxnWrapper<'a> {
         // what has been popped in the course of this operation.
         // Push these back onto the stack to ensure they are kept
         while let Some(val) = self.popped_values.pop() {
-            (self.push_fn)(*self.uxn, val);
+            (self.push_fn)(*self.uxn, val).expect("Couldn't push");
         }
     }
 }
@@ -86,14 +86,14 @@ pub fn lit_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> 
     // read byte/short from ram
     let a = wrapper.read_next_byte_from_ram()?;
 
-    wrapper.push(a);
+    wrapper.push(a)?;
 
     if short == false {
         return Ok(());
     }
         
     let a = wrapper.read_next_byte_from_ram()?;
-    wrapper.push(a);
+    wrapper.push(a)?;
 
     return Ok(());
 }
@@ -129,14 +129,18 @@ pub fn lda_handler(u: Box<&mut dyn Uxn>, keep: bool, short: bool, ret: bool) -> 
     let address = address + ((wrapper.pop()? as u16) << 8);
 
     let value = wrapper.read_from_ram(address);
-    wrapper.push(value);
+    wrapper.push(value)?;
 
     if short == false {
         return Ok(());
     }
 
+    if address == u16::MAX {
+        return Err(UxnError::OutOfRangeMemoryAddress);
+    }
+
     let value = wrapper.read_from_ram(address+1);
-    wrapper.push(value);
+    wrapper.push(value)?;
 
     return Ok(());
 }
@@ -160,17 +164,13 @@ mod tests {
         set_program_counter_arguments_received: RefCell<VecDeque<(u16,)>>,
 
         push_to_return_stack_arguments_received: RefCell<VecDeque<(u8,)>>,
+        push_to_return_stack_values_to_return: RefCell<VecDeque<Result<(), UxnError>>>,
 
         push_to_working_stack_arguments_received: RefCell<VecDeque<(u8,)>>,
-
-        peek_at_working_stack_arguments_received: RefCell<VecDeque<()>>,
-        peek_at_working_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
+        push_to_working_stack_values_to_return: RefCell<VecDeque<Result<(), UxnError>>>,
 
         pop_from_working_stack_arguments_received: RefCell<VecDeque<()>>,
         pop_from_working_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
-
-        peek_at_return_stack_arguments_received: RefCell<VecDeque<()>>,
-        peek_at_return_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
 
         pop_from_return_stack_arguments_received: RefCell<VecDeque<()>>,
         pop_from_return_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
@@ -193,17 +193,14 @@ mod tests {
                 set_program_counter_arguments_received: RefCell::new(VecDeque::new()),
 
                 push_to_return_stack_arguments_received: RefCell::new(VecDeque::new()),
+                push_to_return_stack_values_to_return: RefCell::new(VecDeque::new()),
 
                 push_to_working_stack_arguments_received: RefCell::new(VecDeque::new()), 
+                push_to_working_stack_values_to_return: RefCell::new(VecDeque::new()),
 
-                peek_at_working_stack_arguments_received: RefCell::new(VecDeque::new()),
-                peek_at_working_stack_values_to_return: RefCell::new(VecDeque::new()),
 
                 pop_from_working_stack_arguments_received: RefCell::new(VecDeque::new()),
                 pop_from_working_stack_values_to_return: RefCell::new(VecDeque::new()),
-
-                peek_at_return_stack_arguments_received: RefCell::new(VecDeque::new()),
-                peek_at_return_stack_values_to_return: RefCell::new(VecDeque::new()),
 
                 pop_from_return_stack_arguments_received: RefCell::new(VecDeque::new()),
                 pop_from_return_stack_values_to_return: RefCell::new(VecDeque::new()),
@@ -240,34 +237,26 @@ mod tests {
                 .borrow_mut().push_back((addr,));
         }
     
-        fn push_to_return_stack(&mut self, byte: u8) {
+        fn push_to_return_stack(&mut self, byte: u8) -> Result<(), UxnError> {
             self.push_to_return_stack_arguments_received
                 .borrow_mut().push_back((byte,));
-        }
-    
-        fn push_to_working_stack(&mut self, byte: u8) {
-            self.push_to_working_stack_arguments_received
-                .borrow_mut().push_back((byte,));
-        }
-        
-        fn peek_at_working_stack(&mut self) -> Result<u8, UxnError> {
-            self.peek_at_working_stack_arguments_received
-                .borrow_mut().push_back(());
-            return self.peek_at_working_stack_values_to_return.borrow_mut()
+
+            return self.push_to_return_stack_values_to_return.borrow_mut()
                 .pop_front().unwrap();
         }
+    
+        fn push_to_working_stack(&mut self, byte: u8) -> Result<(), UxnError> {
+            self.push_to_working_stack_arguments_received
+                .borrow_mut().push_back((byte,));
 
+            return self.push_to_working_stack_values_to_return.borrow_mut()
+                .pop_front().unwrap();
+        }
+        
         fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
             self.pop_from_working_stack_arguments_received
                 .borrow_mut().push_back(());
             return self.pop_from_working_stack_values_to_return.borrow_mut()
-                .pop_front().unwrap();
-        }
-
-        fn peek_at_return_stack(&mut self) -> Result<u8, UxnError> {
-            self.peek_at_return_stack_arguments_received
-                .borrow_mut().push_back(());
-            return self.peek_at_return_stack_values_to_return.borrow_mut()
                 .pop_front().unwrap();
         }
 
@@ -455,5 +444,29 @@ mod tests {
         // previously on the stack, since the handler was called in keep mode
         assert_eq!(mock_uxn.push_to_return_stack_arguments_received.into_inner(),
             VecDeque::from([(0xba,), (0xaa,), (0xd3,), (0xd4,)]));
+    }
+
+    // in short mode, the LDA operation can error if passed an address at
+    // the end of ram (since it tries to fetch two bytes from ram). Test
+    // the error is correctly triggered
+    #[test]
+    fn test_lda_handler_out_of_range_error() {
+        let mut mock_uxn = MockUxn::new();
+
+        mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(
+            VecDeque::from([
+                           Ok(0xff), // least significant byte of address to load
+                           Ok(0xff), // most significant byte, together they make
+                                     // an address right at the end of addressable
+                                     // ram
+            ]));
+
+        mock_uxn.read_from_ram_values_to_return = RefCell::new(
+            VecDeque::from([0xaa, 0xaa])); // short that would be 'read from ram'
+
+        let result = lda_handler(Box::new(&mut mock_uxn),
+            false, true, false);
+
+        assert_eq!(result, Err(UxnError::OutOfRangeMemoryAddress));
     }
 }

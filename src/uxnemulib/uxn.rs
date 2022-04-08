@@ -57,25 +57,19 @@ J: InstructionFactory,
     }
 
     // TODO check for stack overflow
-    fn push_to_return_stack(&mut self, byte: u8) {
+    fn push_to_return_stack(&mut self, byte: u8) -> Result<(), UxnError> {
         self.return_stack.push(byte);
+        Ok(())
     }
 
-    fn push_to_working_stack(&mut self, byte: u8) {
+    fn push_to_working_stack(&mut self, byte: u8) -> Result<(), UxnError> {
         self.working_stack.push(byte);
-    }
-
-    fn peek_at_working_stack(&mut self) -> Result<u8, UxnError> {
-        panic!("TODO");
+        Ok(())
     }
 
     // TODO check for stack underflow
     fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
         Ok(self.working_stack.pop().unwrap())
-    }
-
-    fn peek_at_return_stack(&mut self) -> Result<u8, UxnError> {
-        panic!("TODO");
     }
 
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
