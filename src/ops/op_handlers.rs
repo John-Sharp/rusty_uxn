@@ -41,7 +41,16 @@ impl<'a> UxnWrapper<'a> {
     }
 
     fn push(&mut self, byte: u8) {
-        // TODO think should be pushing to 'popped_values' here
+        
+        // If in keep mode, popped_values will be populated with
+        // what has been popped in the course of this operation.
+        // Push these back on the stack to restore it to its 
+        // state prior to any pops before pushing the desired
+        // value
+        while let Some(val) = self.popped_values.pop() {
+            (self.push_fn)(*self.uxn, val);
+        }
+
         (self.push_fn)(*self.uxn, byte);
     }
 
@@ -66,7 +75,7 @@ impl<'a> Drop for UxnWrapper<'a> {
         // what has been popped in the course of this operation.
         // Push these back onto the stack to ensure they are kept
         while let Some(val) = self.popped_values.pop() {
-            self.push(val);
+            (self.push_fn)(*self.uxn, val);
         }
     }
 }
@@ -419,5 +428,32 @@ mod tests {
         // handler should then write the value read from ram to the stack
         assert_eq!(mock_uxn.push_to_working_stack_arguments_received.into_inner(),
             VecDeque::from([(0xc3,)]));
+    }
+
+    #[test]
+    fn test_lda_handler_keep_short_return_mode() {
+        let mut mock_uxn = MockUxn::new();
+
+        mock_uxn.pop_from_return_stack_values_to_return = RefCell::new(
+            VecDeque::from([
+                           Ok(0xaa), // least significant byte of address to load
+                           Ok(0xba), // most significant byte
+            ]));
+
+        mock_uxn.read_from_ram_values_to_return = RefCell::new(
+            VecDeque::from([0xd3, 0xd4])); // short that is 'read from ram'
+
+        lda_handler(Box::new(&mut mock_uxn),
+            true, true, true).unwrap();
+
+        // handler should attempt to read from the address constructed out of 
+        // bytes it popped from the stack, and then from (address+1)
+        assert_eq!(mock_uxn.read_from_ram_arguments_received.into_inner(),
+            VecDeque::from([(0xbaaa,), (0xbaab,)]));
+
+        // handler should then write the short read from ram to the stack, preceeded by what was
+        // previously on the stack, since the handler was called in keep mode
+        assert_eq!(mock_uxn.push_to_return_stack_arguments_received.into_inner(),
+            VecDeque::from([(0xba,), (0xaa,), (0xd3,), (0xd4,)]));
     }
 }
