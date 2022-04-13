@@ -56,9 +56,9 @@ mod op_handlers;
 const OP_LIST: &'static [OpDescription] = &[
     OpDescription{op_code: OpCode::Brk, byte: 0x00, token: "BRK", handler: op_handlers::lit_handler},
     OpDescription{op_code: OpCode::Inc, byte: 0x01, token: "INC", handler: op_handlers::inc_handler},
-    OpDescription{op_code: OpCode::Pop, byte: 0x02, token: "POP", handler: test_handler},
-    OpDescription{op_code: OpCode::Dup, byte: 0x03, token: "DUP", handler: test_handler},
-    OpDescription{op_code: OpCode::Nip, byte: 0x04, token: "NIP", handler: test_handler},
+    OpDescription{op_code: OpCode::Pop, byte: 0x02, token: "POP", handler: op_handlers::pop_handler},
+    OpDescription{op_code: OpCode::Dup, byte: 0x03, token: "DUP", handler: op_handlers::dup_handler},
+    OpDescription{op_code: OpCode::Nip, byte: 0x04, token: "NIP", handler: op_handlers::nip_handler},
     OpDescription{op_code: OpCode::Swp, byte: 0x05, token: "SWP", handler: test_handler},
     OpDescription{op_code: OpCode::Ovr, byte: 0x06, token: "OVR", handler: test_handler},
     OpDescription{op_code: OpCode::Rot, byte: 0x07, token: "ROT", handler: test_handler},
