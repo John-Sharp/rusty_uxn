@@ -206,13 +206,112 @@ pub fn nip_handler(
 }
 
 // swap handler: exchanges the first and second values at the top of the stack
-//TODO
+pub fn swp_handler(
+    u: Box<&mut dyn Uxn>,
+    keep: bool,
+    short: bool,
+    ret: bool,
+) -> Result<(), UxnError> {
+    let mut wrapper = UxnWrapper::new(u, keep, ret);
+
+    if short == true {
+        let short_low_byte = wrapper.pop()?;
+        let short_high_byte = wrapper.pop()?;
+    
+        let short2_low_byte = wrapper.pop()?;
+        let short2_high_byte = wrapper.pop()?;
+
+        wrapper.push(short_high_byte)?;
+        wrapper.push(short_low_byte)?;
+
+        wrapper.push(short2_high_byte)?;
+        wrapper.push(short2_low_byte)?;
+    } else {
+        let byte = wrapper.pop()?;
+        let byte2 = wrapper.pop()?;
+
+        wrapper.push(byte)?;
+        wrapper.push(byte2)?;
+    }
+
+    return Ok(());
+}
 
 // over handler: duplicates the second value at the top of the stack
-// TODO
+pub fn ovr_handler(
+    u: Box<&mut dyn Uxn>,
+    keep: bool,
+    short: bool,
+    ret: bool,
+) -> Result<(), UxnError> {
+    let mut wrapper = UxnWrapper::new(u, keep, ret);
+
+    if short == true {
+        let short_low_byte = wrapper.pop()?;
+        let short_high_byte = wrapper.pop()?;
+    
+        let short2_low_byte = wrapper.pop()?;
+        let short2_high_byte = wrapper.pop()?;
+
+        wrapper.push(short2_high_byte)?;
+        wrapper.push(short2_low_byte)?;
+
+        wrapper.push(short_high_byte)?;
+        wrapper.push(short_low_byte)?;
+        
+        wrapper.push(short2_high_byte)?;
+        wrapper.push(short2_low_byte)?;
+    } else {
+        let byte = wrapper.pop()?;
+        let byte2 = wrapper.pop()?;
+
+        wrapper.push(byte2)?;
+        wrapper.push(byte)?;
+        wrapper.push(byte2)?;
+    }
+
+    return Ok(());
+}
 
 // rotate handler: rotates three values at the top of the stack, to the left, wrapping
-//TODO
+pub fn rot_handler(
+    u: Box<&mut dyn Uxn>,
+    keep: bool,
+    short: bool,
+    ret: bool,
+) -> Result<(), UxnError> {
+    let mut wrapper = UxnWrapper::new(u, keep, ret);
+
+    if short == true {
+        let a_low = wrapper.pop()?;
+        let a_high = wrapper.pop()?;
+
+        let b_low = wrapper.pop()?;
+        let b_high = wrapper.pop()?;
+
+        let c_low = wrapper.pop()?;
+        let c_high = wrapper.pop()?;
+
+        wrapper.push(b_high)?;
+        wrapper.push(b_low)?;
+
+        wrapper.push(a_high)?;
+        wrapper.push(a_low)?;
+
+        wrapper.push(c_high)?;
+        wrapper.push(c_low)?;
+    } else {
+        let a = wrapper.pop()?;
+        let b = wrapper.pop()?;
+        let c = wrapper.pop()?;
+
+        wrapper.push(b)?;
+        wrapper.push(a)?;
+        wrapper.push(c)?;
+    }
+
+    return Ok(());
+}
 
 pub fn deo_handler(
     u: Box<&mut dyn Uxn>,
@@ -651,6 +750,115 @@ mod tests {
                 .push_to_return_stack_arguments_received
                 .into_inner(),
             VecDeque::from([(0xad,), (0xac,), (0xab,), (0xaa,), (0xab,), (0xaa,),])
+        );
+    }
+
+    #[test]
+    fn test_swp_handler() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab)]));
+        mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()),]));
+
+        swp_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+
+        assert_eq!(
+            mock_uxn
+                .push_to_working_stack_arguments_received
+                .into_inner(),
+            VecDeque::from([(0xaa,), (0xab,),])
+        );
+    }
+
+    #[test]
+    fn test_swp_handler_keep_short_return_mode() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab), Ok(0xac), Ok(0xad),]));
+        mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()),]));
+
+        swp_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+
+        assert_eq!(
+            mock_uxn
+                .push_to_return_stack_arguments_received
+                .into_inner(),
+            VecDeque::from([(0xad,), (0xac,), (0xab,), (0xaa,), (0xab,), (0xaa,), (0xad,), (0xac,)])
+        );
+    }
+
+    #[test]
+    fn test_ovr_handler() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab)]));
+        mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()), Ok(()),]));
+
+        ovr_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+
+        assert_eq!(
+            mock_uxn
+                .push_to_working_stack_arguments_received
+                .into_inner(),
+            VecDeque::from([(0xab,), (0xaa,), (0xab,)])
+        );
+    }
+
+    #[test]
+    fn test_ovr_handler_keep_short_return_mode() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab), Ok(0xac), Ok(0xad),]));
+        mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()), Ok(()),]));
+
+        ovr_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+
+        assert_eq!(
+            mock_uxn
+                .push_to_return_stack_arguments_received
+                .into_inner(),
+            VecDeque::from([(0xad,), (0xac,), (0xab,), (0xaa,), (0xad,), (0xac,), (0xab,), (0xaa,), (0xad,), (0xac,)])
+        );
+    }
+
+    #[test]
+    fn test_rot_handler() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xab),  Ok(0xac),]));
+        mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()), Ok(()),]));
+
+        rot_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+
+        assert_eq!(
+            mock_uxn
+                .push_to_working_stack_arguments_received
+                .into_inner(),
+            VecDeque::from([(0xab,), (0xaa,), (0xac,)])
+        );
+    }
+
+    #[test]
+    fn test_rot_handler_keep_short_return_mode() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xba), Ok(0xab), Ok(0xbb), Ok(0xac), Ok(0xbc),]));
+        mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([
+          Ok(()), Ok(()),
+          Ok(()), Ok(()),
+          Ok(()), Ok(()),
+          Ok(()), Ok(()),
+          Ok(()), Ok(()),
+          Ok(()), Ok(()),]));
+
+        rot_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+
+        assert_eq!(
+            mock_uxn
+                .push_to_return_stack_arguments_received
+                .into_inner(),
+            VecDeque::from([
+             (0xbc,), (0xac,),
+             (0xbb,), (0xab,),
+             (0xba,), (0xaa,),
+
+             (0xbb,), (0xab,),
+             (0xba,), (0xaa,),
+             (0xbc,), (0xac,),])
         );
     }
 
