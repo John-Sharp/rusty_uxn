@@ -4,6 +4,7 @@ use crate::uxninterface::UxnError;
 struct UxnWrapper<'a> {
     uxn: Box<&'a mut dyn Uxn>,
     push_fn: fn(&mut (dyn Uxn + 'a), u8) -> Result<(), UxnError>,
+    push_ret_fn: fn(&mut (dyn Uxn + 'a), u8) -> Result<(), UxnError>,
     pop_fn: fn(&mut (dyn Uxn + 'a)) -> Result<u8, UxnError>,
     keep: bool,
     popped_values: Vec<u8>,
@@ -17,6 +18,12 @@ impl<'a> UxnWrapper<'a> {
             Uxn::push_to_return_stack
         };
 
+        let push_ret_fn = if ret == false {
+            Uxn::push_to_return_stack
+        } else {
+            Uxn::push_to_working_stack
+        };
+
         let pop_fn = if ret == false {
             Uxn::pop_from_working_stack
         } else {
@@ -26,6 +33,7 @@ impl<'a> UxnWrapper<'a> {
         UxnWrapper {
             uxn,
             push_fn,
+            push_ret_fn,
             pop_fn,
             keep,
             popped_values: Vec::new(),
@@ -51,6 +59,10 @@ impl<'a> UxnWrapper<'a> {
         }
 
         (self.push_fn)(*self.uxn, byte)
+    }
+
+    fn push_to_return_stack(&mut self, byte: u8) -> Result<(), UxnError> {
+        (self.push_ret_fn)(*self.uxn, byte)
     }
 
     fn pop(&mut self) -> Result<u8, UxnError> {
@@ -101,6 +113,12 @@ pub use logic::equ_handler;
 pub use logic::neq_handler;
 pub use logic::gth_handler;
 pub use logic::lth_handler;
+
+mod control_flow;
+pub use control_flow::jmp_handler;
+pub use control_flow::jcn_handler;
+pub use control_flow::jsr_handler;
+pub use control_flow::sth_handler;
 
 pub fn deo_handler(
     u: Box<&mut dyn Uxn>,
