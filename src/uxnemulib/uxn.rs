@@ -45,6 +45,10 @@ J: InstructionFactory,
         return self.ram[usize::from(addr)];
     }
 
+    fn write_to_ram(&mut self, addr: u16, val: u8) {
+        self.ram[usize::from(addr)] = val;
+    }
+
     fn get_program_counter(&self) -> Result<u16, UxnError> {
         if self.program_counter.is_err() {
             return Err(UxnError::OutOfRangeMemoryAddress);    
@@ -74,6 +78,22 @@ J: InstructionFactory,
 
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
         Ok(self.return_stack.pop().unwrap())
+    }
+
+    fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError> {
+        // index of device is first nibble of device address
+        let device_index = device_address >> 4;
+
+        // port is second nibble of device address
+        let device_port = device_address & 0xf;
+
+        // look up correct device using index
+        let device = match self.devices.get_mut(&device_index) {
+            Some(device) => device,
+            None => return Err(UxnError::UnrecognisedDevice),
+        };
+
+        return Ok(device.read(device_port));
     }
 
     fn write_to_device(&mut self, device_address: u8, val: u8) {
@@ -151,6 +171,7 @@ mod tests {
     use std::rc::Rc;
     use std::cell::RefCell;
     use crate::instruction::Instruction;
+    use std::collections::VecDeque;
 
     struct MockInstruction {
         byte: u8,
@@ -178,17 +199,29 @@ mod tests {
     }
     struct MockDevice {
         write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>,
+
+        read_from_device_arguments_received: Rc<RefCell<Vec<(u8,)>>>,
+        read_from_device_values_to_return: Rc<RefCell<VecDeque<u8>>>,
     }
 
     impl MockDevice {
         fn new(write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>) -> Self {
-           MockDevice{write_to_device_arguments_received} 
+           MockDevice{
+               write_to_device_arguments_received,
+               read_from_device_arguments_received: Rc::new(RefCell::new(Vec::new())),
+               read_from_device_values_to_return: Rc::new(RefCell::new(VecDeque::new())),
+           } 
         }
     }
 
     impl Device for MockDevice {
         fn write(&mut self, port: u8, val: u8) {
             self.write_to_device_arguments_received.borrow_mut().push((port, val));
+        }
+
+        fn read(&mut self, port: u8) -> u8 {
+            self.read_from_device_arguments_received.borrow_mut().push((port,));
+            return self.read_from_device_values_to_return.borrow_mut().pop_front().unwrap();
         }
     }
 
@@ -256,17 +289,29 @@ mod tests {
     // identical to MockDevice, but a different type
     struct MockDeviceB {
         write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>,
+
+        read_from_device_arguments_received: Rc<RefCell<Vec<(u8,)>>>,
+        read_from_device_values_to_return: Rc<RefCell<VecDeque<u8>>>,
     }
 
     impl MockDeviceB {
         fn new(write_to_device_arguments_received: Rc<RefCell<Vec<(u8, u8)>>>) -> Self {
-           MockDeviceB{write_to_device_arguments_received} 
+           MockDeviceB{
+               write_to_device_arguments_received,
+               read_from_device_arguments_received: Rc::new(RefCell::new(Vec::new())),
+               read_from_device_values_to_return: Rc::new(RefCell::new(VecDeque::new())),
+           } 
         }
     }
 
     impl Device for MockDeviceB {
         fn write(&mut self, port: u8, val: u8) {
             self.write_to_device_arguments_received.borrow_mut().push((port, val));
+        }
+
+        fn read(&mut self, port: u8) -> u8 {
+            self.read_from_device_arguments_received.borrow_mut().push((port,));
+            return self.read_from_device_values_to_return.borrow_mut().pop_front().unwrap();
         }
     }
 

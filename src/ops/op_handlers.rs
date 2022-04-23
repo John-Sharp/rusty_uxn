@@ -143,6 +143,8 @@ mod tests {
         pub read_from_ram_arguments_received: RefCell<VecDeque<(u16,)>>,
         pub read_from_ram_values_to_return: RefCell<VecDeque<u8>>,
 
+        pub write_to_ram_arguments_received: RefCell<VecDeque<(u16, u8,)>>,
+
         pub get_program_counter_arguments_received: RefCell<VecDeque<()>>,
         pub get_program_counter_values_to_return: RefCell<VecDeque<Result<u16, UxnError>>>,
 
@@ -160,6 +162,9 @@ mod tests {
         pub pop_from_return_stack_arguments_received: RefCell<VecDeque<()>>,
         pub pop_from_return_stack_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
 
+        pub read_from_device_arguments_received: RefCell<VecDeque<(u8,)>>,
+        pub read_from_device_values_to_return: RefCell<VecDeque<Result<u8, UxnError>>>,
+
         pub write_to_device_arguments_received: RefCell<VecDeque<(u8, u8)>>,
     }
 
@@ -174,6 +179,8 @@ mod tests {
 
                 read_from_ram_arguments_received: RefCell::new(VecDeque::new()),
                 read_from_ram_values_to_return: RefCell::new(VecDeque::new()),
+
+                write_to_ram_arguments_received: RefCell::new(VecDeque::new()),
 
                 get_program_counter_arguments_received: RefCell::new(VecDeque::new()),
                 get_program_counter_values_to_return: RefCell::new(VecDeque::new()),
@@ -191,6 +198,9 @@ mod tests {
 
                 pop_from_return_stack_arguments_received: RefCell::new(VecDeque::new()),
                 pop_from_return_stack_values_to_return: RefCell::new(VecDeque::new()),
+
+                read_from_device_arguments_received: RefCell::new(VecDeque::new()),
+                read_from_device_values_to_return: RefCell::new(VecDeque::new()),
 
                 write_to_device_arguments_received: RefCell::new(VecDeque::new()),
             }
@@ -218,6 +228,12 @@ mod tests {
                 .borrow_mut()
                 .pop_front()
                 .unwrap();
+        }
+
+        fn write_to_ram(&mut self, addr: u16, val: u8) {
+            self.write_to_ram_arguments_received
+                .borrow_mut()
+                .push_back((addr, val,));
         }
 
         fn get_program_counter(&self) -> Result<u16, UxnError> {
@@ -278,6 +294,18 @@ mod tests {
                 .push_back(());
             return self
                 .pop_from_return_stack_values_to_return
+                .borrow_mut()
+                .pop_front()
+                .unwrap();
+        }
+
+        fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError> {
+            self.read_from_device_arguments_received
+                .borrow_mut()
+                .push_back((device_address,));
+
+            return self
+                .read_from_device_values_to_return
                 .borrow_mut()
                 .pop_front()
                 .unwrap();
