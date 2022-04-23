@@ -9,6 +9,19 @@ pub fn ldz_handler(
     short: bool,
     ret: bool,
 ) -> Result<(), UxnError> {
+    let mut wrapper = UxnWrapper::new(u, keep, ret);
+    let addr = wrapper.pop()?;
+    let addr = u16::from(addr);
+    if short == true {
+        let val_hi = wrapper.read_from_ram(addr);
+        let val_lo = wrapper.read_from_ram(addr+1);
+
+        wrapper.push(val_hi);
+        wrapper.push(val_lo);
+    } else {
+        let val = wrapper.read_from_ram(addr);
+        wrapper.push(val)?;
+    }
 
     return Ok(());
 }
@@ -136,6 +149,44 @@ mod tests {
     #[test]
     fn test_ldz_handler() {
         let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([
+            Ok(0xa1),
+        ]));
+        mock_uxn.push_to_working_stack_values_to_return =  RefCell::new(VecDeque::from([Ok(())]));
+        mock_uxn.read_from_ram_values_to_return =  RefCell::new(VecDeque::from([0x15]));
+
+        ldz_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+
+        assert_eq!(
+            mock_uxn.read_from_ram_arguments_received.into_inner(),
+            VecDeque::from([(0x00a1,)])
+        );
+        assert_eq!(
+            mock_uxn.push_to_working_stack_arguments_received.into_inner(),
+            VecDeque::from([(0x15,)])
+        );
+    }
+
+    #[test]
+    fn test_ldz_handler_keep_short_return_mode() {
+        let mut mock_uxn = MockUxn::new();
+        mock_uxn.pop_from_return_stack_values_to_return = RefCell::new(VecDeque::from([
+            Ok(0xa1),
+        ]));
+
+        mock_uxn.push_to_return_stack_values_to_return =  RefCell::new(VecDeque::from([
+            Ok(()), Ok(()), Ok(()),]));
+        mock_uxn.read_from_ram_values_to_return =  RefCell::new(VecDeque::from([0x15, 0x26]));
+
+        ldz_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        assert_eq!(
+            mock_uxn.read_from_ram_arguments_received.into_inner(),
+            VecDeque::from([(0x00a1,), (0x00a2,)])
+        );
+        assert_eq!(
+            mock_uxn.push_to_return_stack_arguments_received.into_inner(),
+            VecDeque::from([(0xa1,), (0x15,), (0x26,),])
+        );
     }
 
     #[test]
