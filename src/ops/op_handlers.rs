@@ -82,6 +82,15 @@ impl<'a> UxnWrapper<'a> {
         Ok(u16::from_be_bytes([high, low]))
     }
 
+    fn push_short(&mut self, x: u16) -> Result<(), UxnError> {
+        let bytes = u16::to_be_bytes(x);
+
+        self.push(bytes[0])?;
+        self.push(bytes[1])?;
+
+        Ok(())
+    }
+
     fn write_to_device(&mut self, device_address: u8, val: u8) {
         self.uxn.write_to_device(device_address, val)
     }
@@ -129,6 +138,20 @@ pub use memory::lda_handler;
 pub use memory::sta_handler;
 pub use memory::dei_handler;
 pub use memory::deo_handler;
+
+mod arithmetic;
+pub use arithmetic::add_handler;
+pub use arithmetic::sub_handler;
+pub use arithmetic::mul_handler;
+pub use arithmetic::div_handler;
+
+/* TODO
+mod bitwise;
+pub use bitwise::and_handler;
+pub use bitwise::ora_handler;
+pub use bitwise::eor_handler;
+pub use bitwise::sft_handler;
+*/
 
 #[cfg(test)]
 mod tests {
