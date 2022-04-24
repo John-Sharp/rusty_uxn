@@ -34,7 +34,7 @@ impl Device for Console {
         }
     }
 
-    fn read(&mut self, port: u8) -> u8 {
+    fn read(&mut self, _port: u8) -> u8 {
         panic!("not yet implemented");
     }
 }

@@ -87,11 +87,11 @@ pub fn ldr_handler(
             return Err(UxnError::OutOfRangeMemoryAddress);
         };
 
-        wrapper.push(val_hi);
-        wrapper.push(val_lo);
+        wrapper.push(val_hi)?;
+        wrapper.push(val_lo)?;
     } else {
         let val = wrapper.uxn.read_from_ram(addr);
-        wrapper.push(val);
+        wrapper.push(val)?;
     }
     return Ok(());
 
