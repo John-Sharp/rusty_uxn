@@ -145,13 +145,11 @@ pub use arithmetic::sub_handler;
 pub use arithmetic::mul_handler;
 pub use arithmetic::div_handler;
 
-/* TODO
 mod bitwise;
 pub use bitwise::and_handler;
 pub use bitwise::ora_handler;
 pub use bitwise::eor_handler;
 pub use bitwise::sft_handler;
-*/
 
 #[cfg(test)]
 mod tests {

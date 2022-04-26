@@ -46,11 +46,6 @@ struct OpDescription {
     handler: fn(Box<&mut dyn Uxn>, bool, bool, bool) -> Result<(), UxnError>,
 }
 
-fn test_handler(_u: Box<&mut dyn Uxn>, _keep: bool, _short: bool, _ret: bool) -> Result<(), UxnError> {
-    println!("doing test handler");
-    return Ok(());
-}
-
 mod op_handlers;
 
 const OP_LIST: &'static [OpDescription] = &[
@@ -78,14 +73,14 @@ const OP_LIST: &'static [OpDescription] = &[
     OpDescription{op_code: OpCode::Sta, byte: 0x15, token: "STA", handler: op_handlers::sta_handler},
     OpDescription{op_code: OpCode::Dei, byte: 0x16, token: "DEI", handler: op_handlers::dei_handler},
     OpDescription{op_code: OpCode::Deo, byte: 0x17, token: "DEO", handler: op_handlers::deo_handler},
-    OpDescription{op_code: OpCode::Add, byte: 0x18, token: "ADD", handler: test_handler},
-    OpDescription{op_code: OpCode::Sub, byte: 0x19, token: "SUB", handler: test_handler},
-    OpDescription{op_code: OpCode::Mul, byte: 0x1a, token: "MUL", handler: test_handler},
-    OpDescription{op_code: OpCode::Div, byte: 0x1b, token: "DIV", handler: test_handler},
-    OpDescription{op_code: OpCode::And, byte: 0x1c, token: "AND", handler: test_handler},
-    OpDescription{op_code: OpCode::Ora, byte: 0x1d, token: "ORA", handler: test_handler},
-    OpDescription{op_code: OpCode::Eor, byte: 0x1e, token: "EOR", handler: test_handler},
-    OpDescription{op_code: OpCode::Sft, byte: 0x1f, token: "SFT", handler: test_handler},
+    OpDescription{op_code: OpCode::Add, byte: 0x18, token: "ADD", handler: op_handlers::add_handler},
+    OpDescription{op_code: OpCode::Sub, byte: 0x19, token: "SUB", handler: op_handlers::sub_handler},
+    OpDescription{op_code: OpCode::Mul, byte: 0x1a, token: "MUL", handler: op_handlers::mul_handler},
+    OpDescription{op_code: OpCode::Div, byte: 0x1b, token: "DIV", handler: op_handlers::div_handler},
+    OpDescription{op_code: OpCode::And, byte: 0x1c, token: "AND", handler: op_handlers::and_handler},
+    OpDescription{op_code: OpCode::Ora, byte: 0x1d, token: "ORA", handler: op_handlers::ora_handler},
+    OpDescription{op_code: OpCode::Eor, byte: 0x1e, token: "EOR", handler: op_handlers::eor_handler},
+    OpDescription{op_code: OpCode::Sft, byte: 0x1f, token: "SFT", handler: op_handlers::sft_handler},
 ];
 
 use crate::instruction::Instruction;
