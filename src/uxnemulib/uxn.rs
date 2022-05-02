@@ -5,17 +5,20 @@ use std::collections::HashMap;
 pub const INIT_VECTOR: u16 = 0x100;
 
 pub mod device; 
-use device::Device;
+use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
 
-struct UxnWithDevices<'a, J>
+struct UxnWithDevices<'a, J, K>
     where J: Uxn,
+          K: DeviceList,
 {
     uxn: &'a mut J,
-    device_list: HashMap<u8, &'a mut dyn Device>,
+    // device_list: HashMap<u8, &'a mut dyn Device>,
+    device_list: K,
 }
 
-impl <'a, J> Uxn for UxnWithDevices<'a, J>
+impl <'a, J, K> Uxn for UxnWithDevices<'a, J, K>
     where J: Uxn,
+          K: DeviceList,
 {
     fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
         return self.uxn.read_next_byte_from_ram();
@@ -54,36 +57,25 @@ impl <'a, J> Uxn for UxnWithDevices<'a, J>
     }
 
     fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError> {
-        // index of device is first nibble of device address
-        let device_index = device_address >> 4;
+        match self.device_list.read_from_device(device_address) {
+            DeviceReadReturnCode::Success(res) => return res,
+            DeviceReadReturnCode::ReadFromSystemDevice(port) => {
+                panic!("TODO...");
+                // return Ok(self.uxn.read(port));
+            },
+        }
 
-        // port is second nibble of device address
-        let device_port = device_address & 0xf;
-
-        // look up correct device using index
-        let device = match self.device_list.get_mut(&device_index) {
-            Some(device) => device,
-            None => return Err(UxnError::UnrecognisedDevice),
-        };
-
-        return Ok(device.read(device_port));
+        return Ok(0);
     }
 
     fn write_to_device(&mut self, device_address: u8, val: u8) {
-        // index of device is first nibble of device address
-        let device_index = device_address >> 4;
-
-        // port is second nibble of device address
-        let device_port = device_address & 0xf;
-
-        // look up correct device using index
-        let device = match self.device_list.get_mut(&device_index) {
-            Some(device) => device,
-            None => return, // TODO return unrecognised device error?
-        };
-
-        // pass port and value through to device
-        device.write(device_port, val);
+        match self.device_list.write_to_device(device_address, val) {
+            DeviceWriteReturnCode::Success => {},
+            DeviceWriteReturnCode::WriteToSystemDevice(port) => {
+                panic!("TODO...");
+                // self.uxn.write(port, val);
+            },
+        }
     }
 }
 
@@ -221,7 +213,7 @@ J: InstructionFactory,
     // has owns mutable reference to device list. write_to_device
     // uses this list, all other functions are the same
     // at end of run the object goes out of scope
-    pub fn run<'a>(&'a mut self, vector: u16, devices: HashMap<u8, &'a mut dyn Device>) -> Result<(), UxnError>
+    pub fn run<K: DeviceList>(&mut self, vector: u16, devices: K) -> Result<(), UxnError>
     {
         self.set_program_counter(vector);
 
@@ -317,6 +309,17 @@ mod tests {
         }
     }
 
+    struct MockDeviceList {}
+    impl DeviceList for MockDeviceList {
+        fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
+            return DeviceWriteReturnCode::Success;
+        }
+
+        fn read_from_device(&mut self, device_address: u8) -> DeviceReadReturnCode {
+            return DeviceReadReturnCode::Success(Ok(0));
+        }
+    }
+
 
     // test creating a UxnImpl and calling its run method with a typical
     // starting vector. Verify works as expected
@@ -327,7 +330,7 @@ mod tests {
         let mut uxn = UxnImpl::new(
             rom.into_iter(),
             MockInstructionFactory::new())?;
-        uxn.run(0x102, HashMap::new())?;
+        uxn.run(0x102, MockDeviceList{})?;
 
         assert_eq!(vec!(0xcc, 0xdd), *uxn.instruction_factory.ret_vec.borrow());
         Ok(())
@@ -344,7 +347,7 @@ mod tests {
         let mut uxn = UxnImpl::new(
             rom.into_iter(),
             MockInstructionFactory::new())?;
-        uxn.run(0xfffd, HashMap::new())?;
+        uxn.run(0xfffd, MockDeviceList{})?;
 
         // the instructions at addresses 0xfffd, 0xfffe, 0xffff should have been
         // executed

@@ -13,9 +13,63 @@ use speedy2d::color::Color;
 
 
 use crate::ops::OpObjectFactory;
-use crate::uxnemulib::uxn::device::Device;
+use crate::uxnemulib::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
 mod devices;
 use devices::console::Console;
+use crate::uxninterface::UxnError;
+
+struct DeviceListImpl<'a> {
+    list: HashMap<u8, &'a mut dyn Device>,
+}
+
+impl<'a> DeviceList for DeviceListImpl<'a> {
+    fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
+        // index of device is first nibble of device address
+        let device_index = device_address >> 4;
+
+        // port is second nibble of device address
+        let device_port = device_address & 0xf;
+
+        // TODO this magic number represents the system device,
+        // have a better way of setting it
+        if device_index == 0x0 {
+            return DeviceWriteReturnCode::WriteToSystemDevice(device_port);
+        }
+
+        // look up correct device using index
+        let device = match self.list.get_mut(&device_index) {
+            Some(device) => device,
+            None => return DeviceWriteReturnCode::Success, // TODO return unrecognised device error?
+        };
+
+        // pass port and value through to device
+        device.write(device_port, val);
+
+        return DeviceWriteReturnCode::Success;
+    }
+
+    fn read_from_device(&mut self, device_address: u8) -> DeviceReadReturnCode {
+        // index of device is first nibble of device address
+        let device_index = device_address >> 4;
+
+        // port is second nibble of device address
+        let device_port = device_address & 0xf;
+
+        // TODO this magic number represents the system device,
+        // have a better way of setting it
+        if device_index == 0x0 {
+            return DeviceReadReturnCode::ReadFromSystemDevice(device_port);
+        }
+
+        // look up correct device using index
+        let device = match self.list.get_mut(&device_index) {
+            Some(device) => device,
+            None => return DeviceReadReturnCode::Success(Err(UxnError::UnrecognisedDevice)),
+        };
+
+        return DeviceReadReturnCode::Success(Ok(device.read(device_port)));
+    }
+}
 
 /// A rust implementation of the uxn virtual machine
 #[derive(Parser)]
@@ -74,6 +128,7 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
 
     let mut device_list: HashMap::<u8, &mut dyn Device> = HashMap::new();
     device_list.insert(0x1, &mut console_device);
+    let device_list = DeviceListImpl{list: device_list};
 
     uxn.run(uxn::INIT_VECTOR, device_list)?;
 
