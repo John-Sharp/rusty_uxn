@@ -7,6 +7,86 @@ pub const INIT_VECTOR: u16 = 0x100;
 pub mod device; 
 use device::Device;
 
+struct UxnWithDevices<'a, J>
+    where J: Uxn,
+{
+    uxn: &'a mut J,
+    device_list: HashMap<u8, &'a mut dyn Device>,
+}
+
+impl <'a, J> Uxn for UxnWithDevices<'a, J>
+    where J: Uxn,
+{
+    fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
+        return self.uxn.read_next_byte_from_ram();
+    }
+
+    fn read_from_ram(&self, addr: u16) -> u8 {
+        return self.uxn.read_from_ram(addr);
+    }
+
+    fn write_to_ram(&mut self, addr: u16, val: u8) {
+        return self.uxn.write_to_ram(addr, val);
+    }
+
+    fn get_program_counter(&self) -> Result<u16, UxnError> {
+        return self.uxn.get_program_counter();
+    }
+
+    fn set_program_counter(&mut self, addr: u16) {
+        return self.uxn.set_program_counter(addr);
+    }
+
+    fn push_to_return_stack(&mut self, byte: u8) -> Result<(), UxnError> {
+        return self.uxn.push_to_return_stack(byte);
+    }
+
+    fn push_to_working_stack(&mut self, byte: u8) -> Result<(), UxnError> {
+        return self.uxn.push_to_working_stack(byte);
+    }
+
+    fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
+        return self.uxn.pop_from_working_stack();
+    }
+
+    fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
+        return self.uxn.pop_from_return_stack();
+    }
+
+    fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError> {
+        // index of device is first nibble of device address
+        let device_index = device_address >> 4;
+
+        // port is second nibble of device address
+        let device_port = device_address & 0xf;
+
+        // look up correct device using index
+        let device = match self.device_list.get_mut(&device_index) {
+            Some(device) => device,
+            None => return Err(UxnError::UnrecognisedDevice),
+        };
+
+        return Ok(device.read(device_port));
+    }
+
+    fn write_to_device(&mut self, device_address: u8, val: u8) {
+        // index of device is first nibble of device address
+        let device_index = device_address >> 4;
+
+        // port is second nibble of device address
+        let device_port = device_address & 0xf;
+
+        // look up correct device using index
+        let device = match self.device_list.get_mut(&device_index) {
+            Some(device) => device,
+            None => return, // TODO return unrecognised device error?
+        };
+
+        // pass port and value through to device
+        device.write(device_port, val);
+    }
+}
+
 pub struct UxnImpl<J> 
    where J: InstructionFactory, 
 {
@@ -136,11 +216,22 @@ J: InstructionFactory,
         return_stack: Vec::new(), instruction_factory, devices});
     }
 
-    pub fn run(&mut self, vector: u16) -> Result<(), UxnError>
+    // TODO pass in device list object to this function
+    // execute with an object that implements Uxn but 
+    // has owns mutable reference to device list. write_to_device
+    // uses this list, all other functions are the same
+    // at end of run the object goes out of scope
+    pub fn run<'a>(&'a mut self, vector: u16, devices: HashMap<u8, &'a mut dyn Device>) -> Result<(), UxnError>
     {
         self.set_program_counter(vector);
+
+        let mut uxn_with_devices = UxnWithDevices {
+            uxn: self,
+            device_list: devices,
+        };
+
         loop {
-            let instr = self.read_next_byte_from_ram();
+            let instr = uxn_with_devices.read_next_byte_from_ram();
             if instr == Err(UxnError::OutOfRangeMemoryAddress) {
                 return Ok(());
             }
@@ -151,10 +242,11 @@ J: InstructionFactory,
             }
 
             // get the operation that the instruction represents
-            let op = self.instruction_factory.from_byte(instr);
+            let op = uxn_with_devices.uxn.instruction_factory.from_byte(instr);
 
             // call its handler
-            op.execute(Box::new(self))?;
+            // TODO I don't think I need a box around this
+            op.execute(Box::new(&mut uxn_with_devices))?;
         }
     }
 
@@ -235,7 +327,7 @@ mod tests {
         let mut uxn = UxnImpl::new(
             rom.into_iter(),
             MockInstructionFactory::new())?;
-        uxn.run(0x102)?;
+        uxn.run(0x102, HashMap::new())?;
 
         assert_eq!(vec!(0xcc, 0xdd), *uxn.instruction_factory.ret_vec.borrow());
         Ok(())
@@ -252,7 +344,7 @@ mod tests {
         let mut uxn = UxnImpl::new(
             rom.into_iter(),
             MockInstructionFactory::new())?;
-        uxn.run(0xfffd)?;
+        uxn.run(0xfffd, HashMap::new())?;
 
         // the instructions at addresses 0xfffd, 0xfffe, 0xffff should have been
         // executed
