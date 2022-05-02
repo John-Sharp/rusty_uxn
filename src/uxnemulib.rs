@@ -122,7 +122,6 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
     let instruction_factory_impl = OpObjectFactory{};
 
     let mut uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
-    uxn.add_device(0x1, Box::new(Console::new()));
 
     let mut console_device = Console::new();
 
