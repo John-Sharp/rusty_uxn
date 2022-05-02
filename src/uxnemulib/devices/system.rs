@@ -4,37 +4,35 @@ pub trait UxnSystemInterface {
     fn set_working_stack_index(&mut self, index: u8);
 }
 
-pub struct System {
+pub struct System<'a, J>
+    where J: UxnSystemInterface,
+{
+    pub uxn: &'a mut J,
 }
 
-impl System {
-    pub fn new() -> Self {
-
-    }
-}
-
-impl Device for System {
+impl<'a, J: UxnSystemInterface> Device for System<'a, J> {
     fn write(&mut self, port: u8, val: u8) {
-        if port > 0xf {
-            panic!("attempting to write to port out of range");
-        }
         match port {
+            0x0..=0x1 => {
+                // not used
+            }
             0x2 => {
                 // set working stack index to `val`
+                self.uxn.set_working_stack_index(val);
             },
             0x3 => {
                 // set return stack index to `val`
             },
-            0x4..0x7 => {
+            0x4..=0x7 => {
                 // not used
             },
-            0x8..0x9 => {
+            0x8..=0x9 => {
                 // set red component of the four system colours
             },
-            0xa..0xb => {
+            0xa..=0xb => {
                 // set blue component of the four system colours
             },
-            0xc..0xd => {
+            0xc..=0xd => {
                 // set green component of the four system colours
             },
             0xe => {
@@ -43,6 +41,9 @@ impl Device for System {
             0xf => {
                 // terminate application
             },
+            _ => {
+                panic!("attempting to write to port out of range");
+            }
         }
     }
 
@@ -51,6 +52,7 @@ impl Device for System {
         if port > 0xf {
             panic!("attempting to read port out of range");
         }
-
+        // TODO
+        return 0;
     }
 }

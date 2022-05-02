@@ -6,18 +6,19 @@ pub const INIT_VECTOR: u16 = 0x100;
 
 pub mod device; 
 use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
+use crate::uxnemulib::devices;
+use crate::uxnemulib::devices::system::UxnSystemInterface;
 
 struct UxnWithDevices<'a, J, K>
-    where J: Uxn,
+    where J: Uxn + UxnSystemInterface,
           K: DeviceList,
 {
     uxn: &'a mut J,
-    // device_list: HashMap<u8, &'a mut dyn Device>,
     device_list: K,
 }
 
 impl <'a, J, K> Uxn for UxnWithDevices<'a, J, K>
-    where J: Uxn,
+    where J: Uxn + UxnSystemInterface,
           K: DeviceList,
 {
     fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
@@ -60,8 +61,8 @@ impl <'a, J, K> Uxn for UxnWithDevices<'a, J, K>
         match self.device_list.read_from_device(device_address) {
             DeviceReadReturnCode::Success(res) => return res,
             DeviceReadReturnCode::ReadFromSystemDevice(port) => {
-                panic!("TODO...");
-                // return Ok(self.uxn.read(port));
+                let mut system = devices::system::System{uxn: self.uxn};
+                return Ok(system.read(port));
             },
         }
 
@@ -72,8 +73,8 @@ impl <'a, J, K> Uxn for UxnWithDevices<'a, J, K>
         match self.device_list.write_to_device(device_address, val) {
             DeviceWriteReturnCode::Success => {},
             DeviceWriteReturnCode::WriteToSystemDevice(port) => {
-                panic!("TODO...");
-                // self.uxn.write(port, val);
+                let mut system = devices::system::System{uxn: self.uxn};
+                system.write(port, val);
             },
         }
     }
@@ -214,6 +215,32 @@ J: InstructionFactory,
             // TODO I don't think I need a box around this
             op.execute(Box::new(&mut uxn_with_devices))?;
         }
+    }
+}
+
+impl<J> UxnSystemInterface for UxnImpl<J>
+where
+J: InstructionFactory,
+{
+    // TODO
+    fn set_working_stack_index(&mut self, index: u8) {
+    }
+}
+
+impl<J> Device for UxnImpl<J>
+where
+J: InstructionFactory,
+{
+    fn write(&mut self, port: u8, val: u8) {
+        let mut system = devices::system::System{uxn: self};
+
+        return system.write(port, val);
+    }
+
+    fn read(&mut self, port: u8) -> u8 {
+        let mut system = devices::system::System{uxn: self};
+
+        return system.read(port);
     }
 }
 
