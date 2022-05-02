@@ -11,9 +11,7 @@ use speedy2d::window::{WindowHandler, WindowHelper};
 use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 
-
 use crate::ops::OpObjectFactory;
-use crate::uxnemulib::uxn::device::Device;
 mod devices;
 use devices::console::Console;
 
@@ -75,6 +73,7 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
     let mut console_device = Console::new();
 
     let mut device_list: HashMap::<u8, DeviceEntry> = HashMap::new();
+    device_list.insert(0x0, DeviceEntry::SystemPlaceHolder);
     device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
     let device_list = DeviceListImpl::new(device_list);
 
