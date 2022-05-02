@@ -1,10 +1,12 @@
 use crate::uxninterface::UxnError;
 
+#[derive(PartialEq, Debug)]
 pub enum DeviceWriteReturnCode {
     Success,
     WriteToSystemDevice(u8),
 }
 
+#[derive(PartialEq, Debug)]
 pub enum DeviceReadReturnCode {
     Success(Result<u8, UxnError>),
     ReadFromSystemDevice(u8),
