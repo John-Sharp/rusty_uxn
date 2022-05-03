@@ -41,6 +41,9 @@ pub trait Uxn {
     fn push_to_working_stack(&mut self, byte: u8) -> Result<(), UxnError>;
     fn pop_from_working_stack(&mut self) -> Result<u8, UxnError>;
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError>;
+}
+
+pub trait UxnWithDevices : Uxn {
     fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError>;
     fn write_to_device(&mut self, device_address: u8, val: u8);
 }

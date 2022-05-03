@@ -1,33 +1,33 @@
-use crate::uxninterface::Uxn;
+use crate::uxninterface::UxnWithDevices;
 use crate::uxninterface::UxnError;
 
 struct UxnWrapper<'a> {
-    uxn: Box<&'a mut dyn Uxn>,
-    push_fn: fn(&mut (dyn Uxn + 'a), u8) -> Result<(), UxnError>,
-    push_ret_fn: fn(&mut (dyn Uxn + 'a), u8) -> Result<(), UxnError>,
-    pop_fn: fn(&mut (dyn Uxn + 'a)) -> Result<u8, UxnError>,
+    uxn: Box<&'a mut dyn UxnWithDevices>,
+    push_fn: fn(&mut (dyn UxnWithDevices + 'a), u8) -> Result<(), UxnError>,
+    push_ret_fn: fn(&mut (dyn UxnWithDevices + 'a), u8) -> Result<(), UxnError>,
+    pop_fn: fn(&mut (dyn UxnWithDevices + 'a)) -> Result<u8, UxnError>,
     keep: bool,
     popped_values: Vec<u8>,
 }
 
 impl<'a> UxnWrapper<'a> {
-    fn new(uxn: Box<&'a mut dyn Uxn>, keep: bool, ret: bool) -> Self {
+    fn new(uxn: Box<&'a mut dyn UxnWithDevices>, keep: bool, ret: bool) -> Self {
         let push_fn = if ret == false {
-            Uxn::push_to_working_stack
+            <dyn UxnWithDevices>::push_to_working_stack
         } else {
-            Uxn::push_to_return_stack
+            <dyn UxnWithDevices>::push_to_return_stack
         };
 
         let push_ret_fn = if ret == false {
-            Uxn::push_to_return_stack
+            <dyn UxnWithDevices>::push_to_return_stack
         } else {
-            Uxn::push_to_working_stack
+            <dyn UxnWithDevices>::push_to_working_stack
         };
 
         let pop_fn = if ret == false {
-            Uxn::pop_from_working_stack
+            <dyn UxnWithDevices>::pop_from_working_stack
         } else {
-            Uxn::pop_from_return_stack
+            <dyn UxnWithDevices>::pop_from_return_stack
         };
 
         UxnWrapper {
@@ -156,6 +156,7 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::collections::VecDeque;
+    use crate::uxninterface::Uxn;
 
     pub struct MockUxn {
         pub read_next_byte_from_ram_arguments_received: RefCell<VecDeque<()>>,
@@ -319,7 +320,9 @@ mod tests {
                 .pop_front()
                 .unwrap();
         }
+    }
 
+    impl UxnWithDevices for MockUxn {
         fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError> {
             self.read_from_device_arguments_received
                 .borrow_mut()

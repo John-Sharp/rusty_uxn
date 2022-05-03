@@ -36,14 +36,14 @@ pub enum OpCode {
     Sft,
 }
 
-use crate::uxninterface::Uxn;
+use crate::uxninterface::UxnWithDevices;
 use crate::uxninterface::UxnError;
 
 struct OpDescription {
     op_code: OpCode,
     byte: u8,
     token: &'static str,
-    handler: fn(Box<&mut dyn Uxn>, bool, bool, bool) -> Result<(), UxnError>,
+    handler: fn(Box<&mut dyn UxnWithDevices>, bool, bool, bool) -> Result<(), UxnError>,
 }
 
 mod op_handlers;
@@ -104,7 +104,7 @@ pub struct OpObject {
 }
 
 impl Instruction for OpObject {
-    fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
+    fn execute(&self, uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError> {
         (OP_LIST[self.handler_index].handler)(uxn, self.keep, self.short, self.ret)
     }
 }

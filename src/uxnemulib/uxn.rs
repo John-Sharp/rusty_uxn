@@ -6,8 +6,9 @@ pub mod device;
 use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
 use crate::uxnemulib::devices;
 use crate::uxnemulib::devices::system::UxnSystemInterface;
+use crate::uxninterface::{Uxn, UxnError, UxnWithDevices};
 
-struct UxnWithDevices<'a, J, K>
+struct UxnWithDevicesImpl<'a, J, K>
     where J: Uxn + UxnSystemInterface,
           K: DeviceList,
 {
@@ -15,7 +16,7 @@ struct UxnWithDevices<'a, J, K>
     device_list: K,
 }
 
-impl <'a, J, K> Uxn for UxnWithDevices<'a, J, K>
+impl <'a, J, K> Uxn for UxnWithDevicesImpl<'a, J, K>
     where J: Uxn + UxnSystemInterface,
           K: DeviceList,
 {
@@ -54,7 +55,12 @@ impl <'a, J, K> Uxn for UxnWithDevices<'a, J, K>
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
         return self.uxn.pop_from_return_stack();
     }
+}
 
+impl <'a, J, K> UxnWithDevices for UxnWithDevicesImpl<'a, J, K>
+    where J: Uxn + UxnSystemInterface,
+          K: DeviceList,
+{
     fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError> {
         match self.device_list.read_from_device(device_address) {
             DeviceReadReturnCode::Success(res) => return res,
@@ -85,9 +91,6 @@ pub struct UxnImpl<J>
     return_stack: Vec<u8>,
     instruction_factory: J,
 }
-
-use crate::uxninterface::Uxn;
-use crate::uxninterface::UxnError;
 
 impl<J> Uxn for UxnImpl<J>
 where
@@ -147,16 +150,6 @@ J: InstructionFactory,
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
         Ok(self.return_stack.pop().unwrap())
     }
-
-    // TODO remove
-    fn read_from_device(&mut self, _device_address: u8) -> Result<u8, UxnError> {
-        panic!("should not be called");
-    }
-
-    // TODO remove
-    fn write_to_device(&mut self, _device_address: u8, _val: u8) {
-        panic!("should not be called");
-    }
 }
 
 impl<J> UxnImpl<J> 
@@ -188,7 +181,7 @@ J: InstructionFactory,
     {
         self.set_program_counter(vector);
 
-        let mut uxn_with_devices = UxnWithDevices {
+        let mut uxn_with_devices = UxnWithDevicesImpl {
             uxn: self,
             device_list: devices,
         };
@@ -252,7 +245,7 @@ mod tests {
         ret_vec: Rc<RefCell<Vec<u8>>>,
     }
     impl Instruction for MockInstruction {
-        fn execute(&self, _uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError> {
+        fn execute(&self, _uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError> {
             self.ret_vec.borrow_mut().push(self.byte);
             Ok(())
         }

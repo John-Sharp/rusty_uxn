@@ -1,10 +1,10 @@
 use super::UxnWrapper;
-use super::Uxn;
+use super::UxnWithDevices;
 use super::UxnError;
 
 // add handler: pushes the sum of the two values at the top of the stack
 pub fn add_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -28,7 +28,7 @@ pub fn add_handler(
 
 // subtract handler: pushes the difference of the first value minus the second, to the top of the stack
 pub fn sub_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -53,7 +53,7 @@ pub fn sub_handler(
 // TODO check for overflow in a nicer way
 // multiply handler: pushes the product of the first and second values at the top of the stack
 pub fn mul_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -78,7 +78,7 @@ pub fn mul_handler(
 
 // divide handler: pushes the quotient of the first value over the second, to the top of the stack
 pub fn div_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,

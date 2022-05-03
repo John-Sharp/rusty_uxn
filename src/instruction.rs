@@ -1,4 +1,4 @@
-use crate::uxninterface::Uxn;
+use crate::uxninterface::UxnWithDevices;
 use crate::uxninterface::UxnError;
 
 pub trait InstructionFactory {
@@ -6,5 +6,5 @@ pub trait InstructionFactory {
 }
 
 pub trait Instruction {
-    fn execute(&self, uxn: Box::<&mut dyn Uxn>) -> Result<(), UxnError>;
+    fn execute(&self, uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError>;
 }

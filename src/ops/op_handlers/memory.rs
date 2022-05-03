@@ -1,10 +1,10 @@
 use super::UxnWrapper;
-use super::Uxn;
+use super::UxnWithDevices;
 use super::UxnError;
 
 // load zero-page handler: pushes the value at an address within the first 256 bytes of memory, to the top of the stack
 pub fn ldz_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -28,7 +28,7 @@ pub fn ldz_handler(
 
 // store zero-page handler: writes a value to an address within the first 256 bytes of memory
 pub fn stz_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -69,7 +69,7 @@ fn get_relative_address_from_stack(wrapper: &mut UxnWrapper) -> Result<u16, UxnE
 
 // load relative handler: pushes the value at a relative address, to the top of the stack. The possible relative range is -128 to +127 bytes
 pub fn ldr_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -99,7 +99,7 @@ pub fn ldr_handler(
 
 // store relative handler: writes a value to a relative address. The possible relative range is -128 to +127 bytes
 pub fn str_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -129,7 +129,7 @@ pub fn str_handler(
 
 // load absolute handler: push value at absolute address to the top of the stack
 pub fn lda_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -160,7 +160,7 @@ pub fn lda_handler(
 
 // store absolute handler: writes a value to an absolute address
 pub fn sta_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -194,7 +194,7 @@ pub fn sta_handler(
 
 // device input handler: pushes a value from the device page, to the top of the stack. The target device might capture the reading to trigger an I/O event
 pub fn dei_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
@@ -227,7 +227,7 @@ pub fn dei_handler(
 
 // device output handler: writes a value to the device page. The target device might capture the writing to trigger an I/O event
 pub fn deo_handler(
-    u: Box<&mut dyn Uxn>,
+    u: Box<&mut dyn UxnWithDevices>,
     keep: bool,
     short: bool,
     ret: bool,
