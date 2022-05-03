@@ -211,8 +211,20 @@ impl<J> UxnSystemInterface for UxnImpl<J>
 where
 J: InstructionFactory,
 {
-    // TODO
-    fn set_working_stack_index(&mut self, _index: u8) {
+    fn set_working_stack_index(&mut self, index: u8) {
+        self.working_stack.resize(index.into(), 0);
+    }
+
+    fn get_working_stack_index(&mut self) -> u8 {
+        u8::try_from(self.working_stack.len()).unwrap()
+    }
+
+    fn set_return_stack_index(&mut self, index: u8) {
+        self.return_stack.resize(index.into(), 0);
+    }
+
+    fn get_return_stack_index(&mut self) -> u8 {
+        u8::try_from(self.return_stack.len()).unwrap()
     }
 }
 
@@ -355,6 +367,18 @@ mod tests {
             fn set_working_stack_index(&mut self, _index: u8) {
                 panic!("should not be called");
             }
+
+            fn get_working_stack_index(&mut self) -> u8 {
+                panic!("should not be called");
+            }
+
+            fn set_return_stack_index(&mut self, _index: u8) {
+                panic!("should not be called");
+            }
+
+            fn get_return_stack_index(&mut self) -> u8 {
+                panic!("should not be called");
+            }
         }
 
         struct MockDeviceList {}
@@ -433,6 +457,18 @@ mod tests {
                 self.set_working_stack_index_called = true;
                 assert_eq!(index, 0x96);
             }
+
+            fn get_working_stack_index(&mut self) -> u8 {
+                return 0x91;
+            }
+
+            fn set_return_stack_index(&mut self, _index: u8) {
+                panic!("should not be called");
+            }
+
+            fn get_return_stack_index(&mut self) -> u8 {
+                panic!("should not be called");
+            }
         }
 
         struct MockDeviceList {}
@@ -446,8 +482,8 @@ mod tests {
             }
 
             fn read_from_device(&mut self, device_address: u8) -> DeviceReadReturnCode {
-                // TODO 
-                panic!("should not be called");
+                assert_eq!(device_address, 0x42);
+                return DeviceReadReturnCode::ReadFromSystemDevice(0x2);
             }
         }
 
@@ -461,5 +497,49 @@ mod tests {
         // UxnSystemInterface::set_working_stack_index being called with the value 0x96
         uxn_with_devices.write_to_device(0x32, 0x96);
         assert_eq!(uxn_with_devices.uxn.set_working_stack_index_called, true);
+
+
+        // test read_from_device, MockDeviceList::read_from_device should be passed the correct
+        // arguments and since it returns ReadFromSystemDevice and the device address ends in the
+        // nibble 0x2 then the System device should result in
+        // UxnSystemInterface::get_working_stack_index being called with the value 0x91
+        let ret = uxn_with_devices.read_from_device(0x42);
+        assert_eq!(ret, Ok(0x91));
+    }
+
+    #[test]
+    fn test_set_get_stack_index() -> Result<(), UxnError> {
+        let mut uxn = UxnImpl::new(
+            vec!().into_iter(),
+            MockInstructionFactory::new())?;
+
+        uxn.push_to_working_stack(0x2)?;
+        uxn.push_to_working_stack(0x3)?;
+
+        assert_eq!(uxn.get_working_stack_index(), 2);
+
+        uxn.set_working_stack_index(6);
+
+        assert_eq!(uxn.working_stack, vec!(0x2, 0x3, 0x0, 0x0, 0x0, 0x0));
+
+        uxn.set_working_stack_index(1);
+
+        assert_eq!(uxn.working_stack, vec!(0x2,));
+
+        uxn.push_to_return_stack(0x4)?;
+        uxn.push_to_return_stack(0x6)?;
+        uxn.push_to_return_stack(0x3)?;
+
+        assert_eq!(uxn.get_return_stack_index(), 3);
+
+        uxn.set_return_stack_index(5);
+
+        assert_eq!(uxn.return_stack, vec!(0x4, 0x6, 0x3, 0x0, 0x0,));
+
+        uxn.set_return_stack_index(1);
+
+        assert_eq!(uxn.return_stack, vec!(0x4,));
+
+        Ok(())
     }
 }

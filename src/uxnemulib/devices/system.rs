@@ -2,6 +2,10 @@ use crate::uxnemulib::uxn::device::Device;
 
 pub trait UxnSystemInterface {
     fn set_working_stack_index(&mut self, index: u8);
+    fn get_working_stack_index(&mut self) -> u8;
+
+    fn set_return_stack_index(&mut self, index: u8);
+    fn get_return_stack_index(&mut self) -> u8;
 }
 
 pub struct System<'a, J>
@@ -22,6 +26,7 @@ impl<'a, J: UxnSystemInterface> Device for System<'a, J> {
             },
             0x3 => {
                 // set return stack index to `val`
+                self.uxn.set_return_stack_index(val);
             },
             0x4..=0x7 => {
                 // not used
@@ -49,10 +54,41 @@ impl<'a, J: UxnSystemInterface> Device for System<'a, J> {
 
 
     fn read(&mut self, port: u8) -> u8 {
-        if port > 0xf {
-            panic!("attempting to read port out of range");
+        match port {
+            0x0..=0x1 => {
+                // not used
+            }
+            0x2 => {
+                // get working stack index
+                return self.uxn.get_working_stack_index();
+            },
+            0x3 => {
+                // get return stack index
+                return self.uxn.get_return_stack_index();
+            },
+            0x4..=0x7 => {
+                // not used
+            },
+            0x8..=0x9 => {
+                // get red component of the four system colours
+            },
+            0xa..=0xb => {
+                // get blue component of the four system colours
+            },
+            0xc..=0xd => {
+                // get green component of the four system colours
+            },
+            0xe => {
+                // print debug status
+            },
+            0xf => {
+                // terminate application
+            },
+            _ => {
+                panic!("attempting to read from port out of range");
+            }
         }
-        // TODO
+
         return 0;
     }
 }
