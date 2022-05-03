@@ -310,4 +310,156 @@ mod tests {
         assert_eq!(vec!(0xaa, 0xaa, 0xaa), *uxn.instruction_factory.ret_vec.borrow());
         Ok(())
     }
+
+    #[test]
+    fn test_read_write_normal_device() {
+        struct MockUxn {}
+        impl Uxn for MockUxn {
+            fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
+                panic!("should not be called");
+            }
+
+            fn read_from_ram(&self, _addr: u16) -> u8 {
+                panic!("should not be called");
+            }
+
+            fn write_to_ram(&mut self, _addr: u16, _val: u8) {
+                panic!("should not be called");
+            }
+
+            fn get_program_counter(&self) -> Result<u16, UxnError> {
+                panic!("should not be called");
+            }
+
+            fn set_program_counter(&mut self, _addr: u16) {
+                panic!("should not be called");
+            }
+
+            fn push_to_return_stack(&mut self, _byte: u8) -> Result<(), UxnError> {
+                panic!("should not be called");
+            }
+
+            fn push_to_working_stack(&mut self, _byte: u8) -> Result<(), UxnError> {
+                panic!("should not be called");
+            }
+
+            fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
+                panic!("should not be called");
+            }
+
+            fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
+                panic!("should not be called");
+            }
+        }
+        impl UxnSystemInterface for MockUxn {
+            fn set_working_stack_index(&mut self, _index: u8) {
+                panic!("should not be called");
+            }
+        }
+
+        struct MockDeviceList {}
+
+        impl DeviceList for MockDeviceList {
+            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
+                assert_eq!(device_address, 0x35);
+                assert_eq!(val, 0x22);
+
+                return DeviceWriteReturnCode::Success;
+            }
+
+            fn read_from_device(&mut self, device_address: u8) -> DeviceReadReturnCode {
+                assert_eq!(device_address, 0x58);
+                return DeviceReadReturnCode::Success(Ok(0x14));
+            }
+        }
+
+        let mut uxn_with_devices = UxnWithDevicesImpl{uxn: &mut MockUxn{}, device_list: MockDeviceList{}};
+
+        // test read_from_device, MockDeviceList::read_from_device should be passed the
+        // correct arguments
+        let res = uxn_with_devices.read_from_device(0x58);
+
+        assert_eq!(res, Ok(0x14));
+
+        // test write_to_device, MockDeviceList::write_to_device should be passed the
+        // correct arguments
+        uxn_with_devices.write_to_device(0x35, 0x22);
+    }
+
+    #[test]
+    fn test_read_write_system_device() {
+        struct MockUxn {
+            set_working_stack_index_called: bool,
+        }
+        impl Uxn for MockUxn {
+            fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
+                panic!("should not be called");
+            }
+
+            fn read_from_ram(&self, _addr: u16) -> u8 {
+                panic!("should not be called");
+            }
+
+            fn write_to_ram(&mut self, _addr: u16, _val: u8) {
+                panic!("should not be called");
+            }
+
+            fn get_program_counter(&self) -> Result<u16, UxnError> {
+                panic!("should not be called");
+            }
+
+            fn set_program_counter(&mut self, _addr: u16) {
+                panic!("should not be called");
+            }
+
+            fn push_to_return_stack(&mut self, _byte: u8) -> Result<(), UxnError> {
+                panic!("should not be called");
+            }
+
+            fn push_to_working_stack(&mut self, _byte: u8) -> Result<(), UxnError> {
+                panic!("should not be called");
+            }
+
+            fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
+                panic!("should not be called");
+            }
+
+            fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
+                panic!("should not be called");
+            }
+        }
+        impl UxnSystemInterface for MockUxn {
+            fn set_working_stack_index(&mut self, index: u8) {
+                self.set_working_stack_index_called = true;
+                assert_eq!(index, 0x96);
+            }
+        }
+
+        struct MockDeviceList {}
+
+        impl DeviceList for MockDeviceList {
+            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
+                assert_eq!(device_address, 0x32);
+                assert_eq!(val, 0x96);
+
+                return DeviceWriteReturnCode::WriteToSystemDevice(0x2);
+            }
+
+            fn read_from_device(&mut self, device_address: u8) -> DeviceReadReturnCode {
+                // TODO 
+                panic!("should not be called");
+            }
+        }
+
+        let mut uxn_with_devices = UxnWithDevicesImpl{
+            uxn: &mut MockUxn{set_working_stack_index_called: false},
+            device_list: MockDeviceList{}};
+
+        // test write_to_device, MockDeviceList::write_to_device should be passed the correct
+        // arguments and since it returns WriteToSystemDevice and the device address ends in the
+        // nibble 0x2 then the System device should result in
+        // UxnSystemInterface::set_working_stack_index being called with the value 0x96
+        uxn_with_devices.write_to_device(0x32, 0x96);
+        assert_eq!(uxn_with_devices.uxn.set_working_stack_index_called, true);
+    }
 }
