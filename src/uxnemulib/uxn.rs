@@ -5,7 +5,7 @@ pub const INIT_VECTOR: u16 = 0x100;
 pub mod device; 
 use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
 use crate::uxnemulib::devices;
-use crate::uxnemulib::devices::system::UxnSystemInterface;
+use crate::uxnemulib::devices::system::{UxnSystemInterface, UxnSystemColor};
 use crate::uxninterface::{Uxn, UxnError, UxnWithDevices};
 
 struct UxnWithDevicesImpl<'a, J, K>
@@ -90,6 +90,7 @@ pub struct UxnImpl<J>
     working_stack: Vec<u8>,
     return_stack: Vec<u8>,
     instruction_factory: J,
+    system_colors: [u8;6],
 }
 
 impl<J> Uxn for UxnImpl<J>
@@ -168,8 +169,11 @@ J: InstructionFactory,
             *ram_loc = val;
         }
 
+        // TODO figure out the default colors
+        let system_colors = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
+
         return Ok(UxnImpl{ram, program_counter:Ok(0), working_stack: Vec::new(),
-        return_stack: Vec::new(), instruction_factory});
+        return_stack: Vec::new(), instruction_factory, system_colors});
     }
 
     // TODO pass in device list object to this function
@@ -207,6 +211,17 @@ J: InstructionFactory,
     }
 }
 
+fn system_color_to_index(system_color: UxnSystemColor) -> usize {
+    match system_color {
+        UxnSystemColor::Red1 => 0,
+        UxnSystemColor::Red2 => 1,
+        UxnSystemColor::Green1 => 2,
+        UxnSystemColor::Green2 => 3,
+        UxnSystemColor::Blue1 => 4,
+        UxnSystemColor::Blue2 => 5,
+    }
+}
+
 impl<J> UxnSystemInterface for UxnImpl<J>
 where
 J: InstructionFactory,
@@ -225,6 +240,22 @@ J: InstructionFactory,
 
     fn get_return_stack_index(&mut self) -> u8 {
         u8::try_from(self.return_stack.len()).unwrap()
+    }
+
+    fn set_system_color(&mut self, slot: UxnSystemColor, val: u8) {
+        self.system_colors[system_color_to_index(slot)] = val;
+    }
+    
+    fn get_system_color(&self, slot: UxnSystemColor) -> u8 {
+        self.system_colors[system_color_to_index(slot)]
+    }
+
+    fn get_working_stack_iter(&self) -> std::slice::Iter<u8> {
+        self.working_stack.iter()
+    }
+
+    fn get_return_stack_iter(&self) -> std::slice::Iter<u8> {
+        self.return_stack.iter()
     }
 }
 
@@ -379,6 +410,22 @@ mod tests {
             fn get_return_stack_index(&mut self) -> u8 {
                 panic!("should not be called");
             }
+
+            fn set_system_color(&mut self, _slot: UxnSystemColor, _val: u8) {
+                panic!("should not be called");
+            }
+
+            fn get_system_color(&self, _slot: UxnSystemColor) -> u8 {
+                panic!("should not be called");
+            }
+
+            fn get_working_stack_iter(&self) -> std::slice::Iter<u8> {
+                panic!("should not be called");
+            }
+
+            fn get_return_stack_iter(&self) -> std::slice::Iter<u8> {
+                panic!("should not be called");
+            }
         }
 
         struct MockDeviceList {}
@@ -469,6 +516,22 @@ mod tests {
             fn get_return_stack_index(&mut self) -> u8 {
                 panic!("should not be called");
             }
+
+            fn set_system_color(&mut self, _slot: UxnSystemColor, _val: u8) {
+                panic!("should not be called");
+            }
+
+            fn get_system_color(&self, _slot: UxnSystemColor) -> u8 {
+                panic!("should not be called");
+            }
+
+            fn get_working_stack_iter(&self) -> std::slice::Iter<u8> {
+                panic!("should not be called");
+            }
+
+            fn get_return_stack_iter(&self) -> std::slice::Iter<u8> {
+                panic!("should not be called");
+            }
         }
 
         struct MockDeviceList {}
@@ -539,6 +602,55 @@ mod tests {
         uxn.set_return_stack_index(1);
 
         assert_eq!(uxn.return_stack, vec!(0x4,));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_get_system_color() -> Result<(), UxnError> {
+        let mut uxn = UxnImpl::new(
+            vec!().into_iter(),
+            MockInstructionFactory::new())?;
+
+        let test_cases = [
+            (UxnSystemColor::Red1, 12),
+            (UxnSystemColor::Red2, 34),
+            (UxnSystemColor::Green1, 56),
+            (UxnSystemColor::Green2, 78),
+            (UxnSystemColor::Blue1, 90),
+            (UxnSystemColor::Blue2, 123),
+        ];
+
+        for &(system_color, val) in &test_cases {
+            assert_eq!(uxn.get_system_color(system_color), 0);
+            uxn.set_system_color(system_color, val);
+            assert_eq!(uxn.get_system_color(system_color), val);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_stack_iter() -> Result<(), UxnError> {
+        let mut uxn = UxnImpl::new(
+            vec!().into_iter(),
+            MockInstructionFactory::new())?;
+
+        uxn.push_to_working_stack(0x2)?;
+        uxn.push_to_working_stack(0x3)?;
+        uxn.push_to_working_stack(0x4)?;
+
+        for (&v, expected) in uxn.get_working_stack_iter().zip([0x2, 0x3, 0x4,]) {
+            assert_eq!(v, expected);
+        }
+
+        uxn.push_to_return_stack(0x5)?;
+        uxn.push_to_return_stack(0x6)?;
+        uxn.push_to_return_stack(0x7)?;
+
+        for (&v, expected) in uxn.get_return_stack_iter().zip([0x5, 0x6, 0x7,]) {
+            assert_eq!(v, expected);
+        }
 
         Ok(())
     }

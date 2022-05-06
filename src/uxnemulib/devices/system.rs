@@ -1,11 +1,27 @@
 use crate::uxnemulib::uxn::device::Device;
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum UxnSystemColor {
+    Red1,
+    Red2,
+    Green1,
+    Green2,
+    Blue1,
+    Blue2,
+}
+
 pub trait UxnSystemInterface {
     fn set_working_stack_index(&mut self, index: u8);
     fn get_working_stack_index(&mut self) -> u8;
 
     fn set_return_stack_index(&mut self, index: u8);
     fn get_return_stack_index(&mut self) -> u8;
+
+    fn set_system_color(&mut self, slot: UxnSystemColor, val: u8);
+    fn get_system_color(&self, slot: UxnSystemColor) -> u8;
+
+    fn get_working_stack_iter(&self) -> std::slice::Iter<u8>;
+    fn get_return_stack_iter(&self) -> std::slice::Iter<u8>;
 }
 
 pub struct System<'a, J>
@@ -31,17 +47,26 @@ impl<'a, J: UxnSystemInterface> Device for System<'a, J> {
             0x4..=0x7 => {
                 // not used
             },
-            0x8..=0x9 => {
-                // set red component of the four system colours
+            0x8 => {
+                self.uxn.set_system_color(UxnSystemColor::Red1, val);
             },
-            0xa..=0xb => {
-                // set blue component of the four system colours
+            0x9 => {
+                self.uxn.set_system_color(UxnSystemColor::Red2, val);
             },
-            0xc..=0xd => {
-                // set green component of the four system colours
+            0xa => {
+                self.uxn.set_system_color(UxnSystemColor::Green1, val);
+            },
+            0xb => {
+                self.uxn.set_system_color(UxnSystemColor::Green2, val);
+            },
+            0xc => {
+                self.uxn.set_system_color(UxnSystemColor::Blue1, val);
+            },
+            0xd => {
+                self.uxn.set_system_color(UxnSystemColor::Blue2, val);
             },
             0xe => {
-                // print debug status
+                // print debug status (no-op for write)
             },
             0xf => {
                 // terminate application
@@ -69,17 +94,27 @@ impl<'a, J: UxnSystemInterface> Device for System<'a, J> {
             0x4..=0x7 => {
                 // not used
             },
-            0x8..=0x9 => {
-                // get red component of the four system colours
+            0x8 => {
+                self.uxn.get_system_color(UxnSystemColor::Red1);
             },
-            0xa..=0xb => {
-                // get blue component of the four system colours
+            0x9 => {
+                self.uxn.get_system_color(UxnSystemColor::Red2);
             },
-            0xc..=0xd => {
-                // get green component of the four system colours
+            0xa => {
+                self.uxn.get_system_color(UxnSystemColor::Green1);
+            },
+            0xb => {
+                self.uxn.get_system_color(UxnSystemColor::Green2);
+            },
+            0xc => {
+                self.uxn.get_system_color(UxnSystemColor::Blue1);
+            },
+            0xd => {
+                self.uxn.get_system_color(UxnSystemColor::Blue2);
             },
             0xe => {
                 // print debug status
+                println!();
             },
             0xf => {
                 // terminate application
