@@ -2,6 +2,7 @@ use clap::Parser;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
+use std::io;
 use std::io::BufReader;
 use std::io::Read;
 use std::collections::HashMap;
@@ -72,8 +73,8 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
 
     let mut console_device = Console::new();
 
-    let mut device_list: HashMap::<u8, DeviceEntry> = HashMap::new();
-    device_list.insert(0x0, DeviceEntry::SystemPlaceHolder);
+    let mut device_list: HashMap::<u8, DeviceEntry<io::Stderr>> = HashMap::new();
+    device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(io::stderr()));
     device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
     let device_list = DeviceListImpl::new(device_list);
 

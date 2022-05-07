@@ -1,23 +1,32 @@
 use super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
 use crate::uxninterface::UxnError;
 use std::collections::HashMap;
+use std::io::Write;
 
-pub enum DeviceEntry<'a> {
+pub enum DeviceEntry<'a, J> 
+    where J: Write
+{
     Device(&'a mut dyn Device),
-    SystemPlaceHolder,
+    SystemPlaceHolder(J),
 }
 
-pub struct DeviceListImpl<'a> {
-    list: HashMap<u8, DeviceEntry<'a>>,
+pub struct DeviceListImpl<'a, J> 
+    where J: Write
+{
+    list: HashMap<u8, DeviceEntry<'a, J>>,
 }
 
-impl<'a> DeviceListImpl<'a> {
-    pub fn new(list: HashMap<u8, DeviceEntry<'a>>) -> Self {
+impl<'a, J> DeviceListImpl<'a, J> 
+    where J: Write
+{
+    pub fn new(list: HashMap<u8, DeviceEntry<'a, J>>) -> Self {
         DeviceListImpl{list}
     }
 }
 
-impl<'a> DeviceList for DeviceListImpl<'a> {
+impl<'a, J> DeviceList for DeviceListImpl<'a, J> 
+    where J: Write
+{
     fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
         // index of device is first nibble of device address
         let device_index = device_address >> 4;
@@ -31,7 +40,7 @@ impl<'a> DeviceList for DeviceListImpl<'a> {
             Some(DeviceEntry::Device(device)) => device,
 
             // device is 'system' device so needs special handling by the calling context
-            Some(DeviceEntry::SystemPlaceHolder) => {
+            Some(DeviceEntry::SystemPlaceHolder(_)) => {
                 return DeviceWriteReturnCode::WriteToSystemDevice(device_port);
             },
 
@@ -58,7 +67,7 @@ impl<'a> DeviceList for DeviceListImpl<'a> {
             Some(DeviceEntry::Device(device)) => device,
 
             // device is 'system' device so needs special handling by the calling context
-            Some(DeviceEntry::SystemPlaceHolder) => {
+            Some(DeviceEntry::SystemPlaceHolder(_)) => {
                 return DeviceReadReturnCode::ReadFromSystemDevice(device_port);
             },
 
@@ -158,7 +167,7 @@ mod tests {
         let mut device_list = HashMap::new();
         device_list.insert(0x0, DeviceEntry::Device(&mut mock_device_a));
         device_list.insert(0x2, DeviceEntry::Device(&mut mock_device_b));
-        device_list.insert(0x3, DeviceEntry::SystemPlaceHolder);
+        device_list.insert(0x3, DeviceEntry::SystemPlaceHolder(Vec::new()));
 
         let mut device_list = DeviceListImpl::new(device_list);
 
@@ -207,7 +216,7 @@ mod tests {
         let mut device_list = HashMap::new();
         device_list.insert(0x0, DeviceEntry::Device(&mut mock_device_a));
         device_list.insert(0x2, DeviceEntry::Device(&mut mock_device_b));
-        device_list.insert(0x3, DeviceEntry::SystemPlaceHolder);
+        device_list.insert(0x3, DeviceEntry::SystemPlaceHolder(Vec::new()));
 
         let mut device_list = DeviceListImpl::new(device_list);
 
