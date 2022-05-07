@@ -65,7 +65,9 @@ impl <'a, J, K> UxnWithDevices for UxnWithDevicesImpl<'a, J, K>
         match self.device_list.read_from_device(device_address) {
             DeviceReadReturnCode::Success(res) => return res,
             DeviceReadReturnCode::ReadFromSystemDevice(port) => {
-                let mut system = devices::system::System{uxn: self.uxn};
+                // TODO pass in debug writer here
+                let mut temp_writer = Vec::new();
+                let mut system = devices::system::System::new(self.uxn, &mut temp_writer);
                 return Ok(system.read(port));
             },
         }
@@ -75,7 +77,9 @@ impl <'a, J, K> UxnWithDevices for UxnWithDevicesImpl<'a, J, K>
         match self.device_list.write_to_device(device_address, val) {
             DeviceWriteReturnCode::Success => {},
             DeviceWriteReturnCode::WriteToSystemDevice(port) => {
-                let mut system = devices::system::System{uxn: self.uxn};
+                // TODO pass in debug writer here
+                let mut temp_writer = Vec::new();
+                let mut system = devices::system::System::new(self.uxn, &mut temp_writer);
                 system.write(port, val);
             },
         }
@@ -230,7 +234,7 @@ J: InstructionFactory,
         self.working_stack.resize(index.into(), 0);
     }
 
-    fn get_working_stack_index(&mut self) -> u8 {
+    fn get_working_stack_index(&self) -> u8 {
         u8::try_from(self.working_stack.len()).unwrap()
     }
 
@@ -238,7 +242,7 @@ J: InstructionFactory,
         self.return_stack.resize(index.into(), 0);
     }
 
-    fn get_return_stack_index(&mut self) -> u8 {
+    fn get_return_stack_index(&self) -> u8 {
         u8::try_from(self.return_stack.len()).unwrap()
     }
 
@@ -256,23 +260,6 @@ J: InstructionFactory,
 
     fn get_return_stack_iter(&self) -> std::slice::Iter<u8> {
         self.return_stack.iter()
-    }
-}
-
-impl<J> Device for UxnImpl<J>
-where
-J: InstructionFactory,
-{
-    fn write(&mut self, port: u8, val: u8) {
-        let mut system = devices::system::System{uxn: self};
-
-        return system.write(port, val);
-    }
-
-    fn read(&mut self, port: u8) -> u8 {
-        let mut system = devices::system::System{uxn: self};
-
-        return system.read(port);
     }
 }
 
@@ -399,7 +386,7 @@ mod tests {
                 panic!("should not be called");
             }
 
-            fn get_working_stack_index(&mut self) -> u8 {
+            fn get_working_stack_index(&self) -> u8 {
                 panic!("should not be called");
             }
 
@@ -407,7 +394,7 @@ mod tests {
                 panic!("should not be called");
             }
 
-            fn get_return_stack_index(&mut self) -> u8 {
+            fn get_return_stack_index(&self) -> u8 {
                 panic!("should not be called");
             }
 
@@ -505,7 +492,7 @@ mod tests {
                 assert_eq!(index, 0x96);
             }
 
-            fn get_working_stack_index(&mut self) -> u8 {
+            fn get_working_stack_index(&self) -> u8 {
                 return 0x91;
             }
 
@@ -513,7 +500,7 @@ mod tests {
                 panic!("should not be called");
             }
 
-            fn get_return_stack_index(&mut self) -> u8 {
+            fn get_return_stack_index(&self) -> u8 {
                 panic!("should not be called");
             }
 
