@@ -1,9 +1,12 @@
 use crate::uxninterface::UxnError;
+use std::io;
 
 #[derive(PartialEq, Debug)]
-pub enum DeviceWriteReturnCode {
+pub enum DeviceWriteReturnCode<'a, K>
+    where K: io::Write,
+{
     Success,
-    WriteToSystemDevice(u8),
+    WriteToSystemDevice(u8, &'a mut K),
 }
 
 #[derive(PartialEq, Debug)]
@@ -12,8 +15,11 @@ pub enum DeviceReadReturnCode {
     ReadFromSystemDevice(u8),
 }
 
-pub trait DeviceList {
-    fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode;
+pub trait DeviceList 
+{
+    type DebugWriter: io::Write;
+
+    fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<Self::DebugWriter>;
     fn read_from_device(&mut self, device_address: u8) -> DeviceReadReturnCode;
 }
 

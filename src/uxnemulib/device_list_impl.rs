@@ -27,7 +27,9 @@ impl<'a, J> DeviceListImpl<'a, J>
 impl<'a, J> DeviceList for DeviceListImpl<'a, J> 
     where J: Write
 {
-    fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
+    type DebugWriter = J;
+
+    fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<J> {
         // index of device is first nibble of device address
         let device_index = device_address >> 4;
 
@@ -40,8 +42,8 @@ impl<'a, J> DeviceList for DeviceListImpl<'a, J>
             Some(DeviceEntry::Device(device)) => device,
 
             // device is 'system' device so needs special handling by the calling context
-            Some(DeviceEntry::SystemPlaceHolder(_)) => {
-                return DeviceWriteReturnCode::WriteToSystemDevice(device_port);
+            Some(DeviceEntry::SystemPlaceHolder(debug_printer)) => {
+                return DeviceWriteReturnCode::WriteToSystemDevice(device_port, debug_printer);
             },
 
             // device not found under this index
@@ -183,7 +185,22 @@ mod tests {
         // write 77 to device 0x3, port 0x9
         let ret = device_list.write_to_device(0x39, 77);
 
-        assert_eq!(ret, DeviceWriteReturnCode::WriteToSystemDevice(0x9));
+        match ret {
+            DeviceWriteReturnCode::WriteToSystemDevice(0x9, debug_printer) => {
+                // write a test string to the debug printer provided by
+                // WriteToSystemDevice, will check this later
+                writeln!(debug_printer, "this is a test").unwrap();
+            },
+            _ => panic!("write_to_device did not return what was expected"),
+        }
+
+        // check that the debug printer that was passed with the 'write to system device' command
+        // was the correct one
+        if let DeviceEntry::SystemPlaceHolder(debug_printer) = device_list.list.get_mut(&0x3).unwrap() {
+            assert_eq!(debug_printer, "this is a test\n".as_bytes());
+        } else {
+            panic!("did not find expected device in device list slot 0x3");
+        }
 
         // assert that the mock devices received the expected arguments
         assert_eq!(

@@ -65,7 +65,6 @@ impl <'a, J, K> UxnWithDevices for UxnWithDevicesImpl<'a, J, K>
         match self.device_list.read_from_device(device_address) {
             DeviceReadReturnCode::Success(res) => return res,
             DeviceReadReturnCode::ReadFromSystemDevice(port) => {
-                // TODO pass in debug writer here
                 let mut temp_writer = Vec::new();
                 let mut system = devices::system::System::new(self.uxn, &mut temp_writer);
                 return Ok(system.read(port));
@@ -76,10 +75,8 @@ impl <'a, J, K> UxnWithDevices for UxnWithDevicesImpl<'a, J, K>
     fn write_to_device(&mut self, device_address: u8, val: u8) {
         match self.device_list.write_to_device(device_address, val) {
             DeviceWriteReturnCode::Success => {},
-            DeviceWriteReturnCode::WriteToSystemDevice(port) => {
-                // TODO pass in debug writer here
-                let mut temp_writer = Vec::new();
-                let mut system = devices::system::System::new(self.uxn, &mut temp_writer);
+            DeviceWriteReturnCode::WriteToSystemDevice(port, debug_printer) => {
+                let mut system = devices::system::System::new(self.uxn, debug_printer);
                 system.write(port, val);
             },
         }
@@ -297,7 +294,9 @@ mod tests {
 
     struct MockDeviceList {}
     impl DeviceList for MockDeviceList {
-        fn write_to_device(&mut self, _device_address: u8, _val: u8) -> DeviceWriteReturnCode {
+        type DebugWriter = Vec<u8>;
+
+        fn write_to_device(&mut self, _device_address: u8, _val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
             return DeviceWriteReturnCode::Success;
         }
 
@@ -418,7 +417,9 @@ mod tests {
         struct MockDeviceList {}
 
         impl DeviceList for MockDeviceList {
-            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
+            type DebugWriter = Vec<u8>;
+
+            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
                 assert_eq!(device_address, 0x35);
                 assert_eq!(val, 0x22);
 
@@ -448,6 +449,8 @@ mod tests {
     fn test_read_write_system_device() {
         struct MockUxn {
             set_working_stack_index_called: bool,
+            mock_working_stack: Vec<u8>,
+            mock_return_stack: Vec<u8>,
         }
         impl Uxn for MockUxn {
             fn read_next_byte_from_ram(&mut self) -> Result<u8, UxnError> {
@@ -513,22 +516,39 @@ mod tests {
             }
 
             fn get_working_stack_iter(&self) -> std::slice::Iter<u8> {
-                panic!("should not be called");
+                return self.mock_working_stack.iter();
             }
 
             fn get_return_stack_iter(&self) -> std::slice::Iter<u8> {
-                panic!("should not be called");
+                return self.mock_return_stack.iter();
             }
         }
 
-        struct MockDeviceList {}
+        struct MockDeviceList {
+            debug_printer: Vec<u8>,
+            expected_device_address: u8,
+            expected_val: u8,
+        }
+
+        impl MockDeviceList {
+            fn new() -> Self {
+                MockDeviceList {
+                    debug_printer: Vec::new(),
+                    expected_device_address: 0,
+                    expected_val: 0,
+                }
+            }
+        }
 
         impl DeviceList for MockDeviceList {
-            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode {
-                assert_eq!(device_address, 0x32);
-                assert_eq!(val, 0x96);
+            type DebugWriter = Vec<u8>;
 
-                return DeviceWriteReturnCode::WriteToSystemDevice(0x2);
+
+            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
+                assert_eq!(device_address, self.expected_device_address);
+                assert_eq!(val, self.expected_val);
+
+                return DeviceWriteReturnCode::WriteToSystemDevice(device_address & 0xf, &mut self.debug_printer);
             }
 
             fn read_from_device(&mut self, device_address: u8) -> DeviceReadReturnCode {
@@ -538,13 +558,15 @@ mod tests {
         }
 
         let mut uxn_with_devices = UxnWithDevicesImpl{
-            uxn: &mut MockUxn{set_working_stack_index_called: false},
-            device_list: MockDeviceList{}};
+            uxn: &mut MockUxn{set_working_stack_index_called: false, mock_working_stack: vec![1,2,3], mock_return_stack: vec![4,5,6]},
+            device_list: MockDeviceList::new()};
 
         // test write_to_device, MockDeviceList::write_to_device should be passed the correct
         // arguments and since it returns WriteToSystemDevice and the device address ends in the
         // nibble 0x2 then the System device should result in
         // UxnSystemInterface::set_working_stack_index being called with the value 0x96
+        uxn_with_devices.device_list.expected_device_address = 0x32;
+        uxn_with_devices.device_list.expected_val = 0x96;
         uxn_with_devices.write_to_device(0x32, 0x96);
         assert_eq!(uxn_with_devices.uxn.set_working_stack_index_called, true);
 
@@ -555,6 +577,16 @@ mod tests {
         // UxnSystemInterface::get_working_stack_index being called with the value 0x91
         let ret = uxn_with_devices.read_from_device(0x42);
         assert_eq!(ret, Ok(0x91));
+
+
+        // test write_to device with the System device asking to print the debug string.
+        // Verify that the debug printer returned by the MockDeviceList is actually 
+        // used for the debug string printing
+        uxn_with_devices.device_list.expected_device_address = 0x3e;
+        uxn_with_devices.device_list.expected_val = 0x11;
+        uxn_with_devices.write_to_device(0x3e, 0x11);
+        assert_eq!(uxn_with_devices.device_list.debug_printer,
+                   "<wst> 01 02 03\n<rst> 04 05 06\n".as_bytes());
     }
 
     #[test]
