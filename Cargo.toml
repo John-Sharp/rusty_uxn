@@ -8,6 +8,11 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.0", features = ["derive"] }
 speedy2d = "1.5.0"
+uuid = { version = "1.0.0", features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]}
 
 [features]
 emu = []

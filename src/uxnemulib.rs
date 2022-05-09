@@ -56,12 +56,12 @@ impl WindowHandler for MyWindowHandler
 
 pub mod uxn;
 
-pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
-    let rom = match File::open(config.rom.as_path()) {
+pub fn run(cli_config: Cli, other_config: Config) -> Result<(), Box<dyn Error>> {
+    let rom = match File::open(cli_config.rom.as_path()) {
         Ok(fp) => fp,
         Err(_err) => {
             return Err(Box::new(RomReadError {
-                fname: config.rom.as_path().display().to_string().clone(),
+                fname: cli_config.rom.as_path().display().to_string().clone(),
             }));
         }
     };
@@ -80,6 +80,7 @@ pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
 
     uxn.run(uxn::INIT_VECTOR, device_list)?;
 
-    let window = Window::new_centered("Title", (512, 320)).unwrap();
-    window.run_loop(MyWindowHandler{});
+    // let window = Window::new_centered("Title", (512, 320)).unwrap();
+    // window.run_loop(MyWindowHandler{});
+    return Ok(());
 }
