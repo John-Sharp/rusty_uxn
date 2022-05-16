@@ -1,12 +1,1 @@
-( hello.tal )
-
-( devices )
-|10 @Console [ &vector $2 &read $1 &pad $5 &write $1 &error $1 ]
-
-( main program )
-|0100 LIT 'h .Console/write DEO
-      LIT 'e .Console/write DEO
-      LIT 'l .Console/write DEO
-      LIT 'l .Console/write DEO
-      LIT 'o .Console/write DEO
-      #0a .Console/write DEO ( newline )
+|100 LIT 22 LIT 33 LITr 44 LITr 55 LIT 00 LIT 0e DEO
