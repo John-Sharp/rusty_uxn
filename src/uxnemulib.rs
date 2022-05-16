@@ -2,7 +2,6 @@ use clap::Parser;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
-use std::io;
 use std::io::BufReader;
 use std::io::Read;
 use std::collections::HashMap;
@@ -18,6 +17,7 @@ use devices::console::Console;
 
 mod device_list_impl;
 use device_list_impl::{DeviceListImpl, DeviceEntry};
+use std::io::Write;
 
 /// A rust implementation of the uxn virtual machine
 #[derive(Parser)]
@@ -25,6 +25,10 @@ pub struct Cli {
     /// Rom to run
     #[clap(parse(from_os_str))]
     pub rom: std::path::PathBuf,
+}
+
+pub struct Config<J: Write> {
+    pub stderr_writer: J,
 }
 
 #[derive(Debug)]
@@ -56,7 +60,7 @@ impl WindowHandler for MyWindowHandler
 
 pub mod uxn;
 
-pub fn run(cli_config: Cli, other_config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run<J: Write>(cli_config: Cli, other_config: Config<J>) -> Result<(), Box<dyn Error>> {
     let rom = match File::open(cli_config.rom.as_path()) {
         Ok(fp) => fp,
         Err(_err) => {
@@ -73,8 +77,8 @@ pub fn run(cli_config: Cli, other_config: Config) -> Result<(), Box<dyn Error>> 
 
     let mut console_device = Console::new();
 
-    let mut device_list: HashMap::<u8, DeviceEntry<io::Stderr>> = HashMap::new();
-    device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(io::stderr()));
+    let mut device_list: HashMap::<u8, DeviceEntry<J>> = HashMap::new();
+    device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(other_config.stderr_writer));
     device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
     let device_list = DeviceListImpl::new(device_list);
 
