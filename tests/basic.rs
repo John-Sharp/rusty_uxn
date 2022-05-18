@@ -1,6 +1,6 @@
 use uuid::Uuid;
 use std::fs;
-use rusty_uxn::uxnemulib;
+use rusty_uxn::emulators::uxnemulib;
 
 // push some values onto the working and return stacks, verify
 // from the system device debug output that the stacks look as

@@ -1,4 +1,4 @@
-use crate::uxnemulib::uxn::device::Device;
+use crate::emulators::uxnemulib::uxn::device::Device;
 use std::io;
 use std::io::Write;
 

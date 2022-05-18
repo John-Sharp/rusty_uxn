@@ -4,8 +4,8 @@ pub const INIT_VECTOR: u16 = 0x100;
 
 pub mod device; 
 use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
-use crate::uxnemulib::devices;
-use crate::uxnemulib::devices::system::{UxnSystemInterface, UxnSystemColor};
+use crate::emulators::uxnemulib::devices;
+use crate::emulators::uxnemulib::devices::system::{UxnSystemInterface, UxnSystemColor};
 use crate::uxninterface::{Uxn, UxnError, UxnWithDevices};
 
 struct UxnWithDevicesImpl<'a, J, K>
