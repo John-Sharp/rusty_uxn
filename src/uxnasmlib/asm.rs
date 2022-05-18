@@ -7,7 +7,7 @@ use std::io::SeekFrom;
 use std::io::Write;
 use std::str::FromStr;
 
-pub mod prog_state {
+mod prog_state {
     use std::collections::HashMap;
 
     #[derive(Debug, PartialEq)]
