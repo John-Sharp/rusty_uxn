@@ -12,7 +12,7 @@ use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 
 use crate::ops::OpObjectFactory;
-mod devices;
+pub mod devices;
 use devices::console::Console;
 
 mod device_list_impl;
@@ -46,6 +46,8 @@ impl fmt::Display for RomReadError {
 
 impl Error for RomReadError {}
 
+use crate::emulators::uxn;
+
 struct MyWindowHandler<J: instruction::InstructionFactory, K: Write> {
     uxn: uxn::UxnImpl<J>,
     console_device: Console,
@@ -75,8 +77,6 @@ impl<J: instruction::InstructionFactory, K: Write>  WindowHandler for MyWindowHa
         // the screen draw vector
     }
 }
-
-pub mod uxn;
 
 pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Result<(), Box<dyn Error>> {
     let rom = match File::open(cli_config.rom.as_path()) {

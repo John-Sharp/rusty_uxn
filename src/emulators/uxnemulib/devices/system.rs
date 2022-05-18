@@ -1,4 +1,4 @@
-use crate::emulators::uxnemulib::uxn::device::Device;
+use crate::emulators::uxn::device::Device;
 use std::io::Write;
 
 #[derive(Debug, PartialEq, Clone, Copy)]

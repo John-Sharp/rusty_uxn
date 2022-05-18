@@ -1,4 +1,4 @@
-use super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
+use super::super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
 use crate::uxninterface::UxnError;
 use std::collections::HashMap;
 use std::io::Write;
