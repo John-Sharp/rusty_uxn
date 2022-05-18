@@ -12,8 +12,7 @@ use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 
 use crate::ops::OpObjectFactory;
-pub mod devices;
-use devices::console::Console;
+use crate::emulators::devices::console::Console;
 
 mod device_list_impl;
 use device_list_impl::{DeviceListImpl, DeviceEntry};
