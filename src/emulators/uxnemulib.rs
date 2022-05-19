@@ -14,8 +14,7 @@ use speedy2d::color::Color;
 use crate::ops::OpObjectFactory;
 use crate::emulators::devices::console::Console;
 
-mod device_list_impl;
-use device_list_impl::{DeviceListImpl, DeviceEntry};
+use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
 
 use crate::instruction;
