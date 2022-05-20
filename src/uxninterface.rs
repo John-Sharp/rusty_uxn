@@ -2,6 +2,12 @@ use std::fmt;
 use std::error::Error;
 
 #[derive(Debug, PartialEq)]
+pub enum UxnStatus {
+    Halt,
+    Terminate,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum UxnError {
     OutOfRangeMemoryAddress,
     StackUnderflow,

@@ -21,6 +21,8 @@ pub trait UxnSystemInterface {
     fn set_system_color(&mut self, slot: UxnSystemColor, val: u8);
     fn get_system_color(&self, slot: UxnSystemColor) -> u8;
 
+    fn start_termination(&mut self);
+
     fn get_working_stack_iter(&self) -> std::slice::Iter<u8>;
     fn get_return_stack_iter(&self) -> std::slice::Iter<u8>;
 }
@@ -104,6 +106,9 @@ impl<'a, J: UxnSystemInterface, K: Write> Device for System<'a, J, K> {
             },
             0xf => {
                 // terminate application
+                if val != 0 {
+                    self.uxn.start_termination();
+                }
             },
             _ => {
                 panic!("attempting to write to port out of range");
@@ -183,6 +188,8 @@ mod tests {
         get_system_color_arguments_received: RefCell<VecDeque<(UxnSystemColor,)>>,
         get_system_color_values_to_return: RefCell<VecDeque<u8>>,
 
+        start_termination_arguments_received: RefCell<VecDeque<()>>,
+
         get_working_stack_iter_values_to_return: Vec<u8>,
         get_return_stack_iter_values_to_return: Vec<u8>,
     }
@@ -202,6 +209,8 @@ mod tests {
 
                 get_system_color_arguments_received: RefCell::new(VecDeque::new()),
                 get_system_color_values_to_return: RefCell::new(VecDeque::new()),
+
+                start_termination_arguments_received: RefCell::new(VecDeque::new()),
 
                 get_working_stack_iter_values_to_return: Vec::new(),
                 get_return_stack_iter_values_to_return: Vec::new(),
@@ -262,6 +271,12 @@ mod tests {
                 .borrow_mut()
                 .pop_front()
                 .unwrap();
+        }
+
+        fn start_termination(&mut self) {
+            self.start_termination_arguments_received
+                .borrow_mut()
+                .push_back(());
         }
 
         fn get_working_stack_iter(&self) -> std::slice::Iter<u8> {
@@ -433,5 +448,19 @@ mod tests {
 
         assert_eq!(&(String::from_utf8(output_received).unwrap()),
             "<wst> 04 05 06\n<rst> 01 02 03\n");
+    }
+
+    #[test]
+    fn test_terminate() {
+        let mut mock_uxn = MockUxn::new();
+        let mut output_received = Vec::new();
+
+        let mut system = System {
+            uxn: &mut mock_uxn,
+            debug_writer: &mut output_received,
+        };
+
+        system.write(0xf, 0x1);
+        assert_eq!(mock_uxn.start_termination_arguments_received.into_inner(), VecDeque::from([()]));
     }
 }

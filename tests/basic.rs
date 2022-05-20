@@ -8,9 +8,9 @@ use rusty_uxn::emulators::uxnclilib;
 #[test]
 fn push_and_debug() {
     // this is the machine code for the following assembly:
-    // |100 LIT 22 LIT 33 LITr 44 LITr 55 LIT 00 LIT 0e DEO
+    // |100 LIT 22 LIT 33 LITr 44 LITr 55 LIT 00 LIT 0e DEO LIT 01 LIT 0f DEO
     let prog = vec![0x80, 0x22, 0x80, 0x33, 0xc0, 0x44, 0xc0, 0x55,
-        0x80, 0x00, 0x80, 0x0e, 0x17];
+        0x80, 0x00, 0x80, 0x0e, 0x17, 0x80, 0x01, 0x80, 0x0f, 0x17];
 
     let tmp_file_name = format!("push_and_debug{}", Uuid::new_v4());
     let mut tmp_file_path = std::env::temp_dir();

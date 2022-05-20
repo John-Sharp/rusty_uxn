@@ -6,7 +6,7 @@ pub mod device;
 use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
 use crate::emulators::devices;
 use crate::emulators::devices::system::{UxnSystemInterface, UxnSystemColor};
-use crate::uxninterface::{Uxn, UxnError, UxnWithDevices};
+use crate::uxninterface::{Uxn, UxnError, UxnStatus, UxnWithDevices};
 
 struct UxnWithDevicesImpl<'a, J, K>
     where J: Uxn + UxnSystemInterface,
@@ -92,6 +92,7 @@ pub struct UxnImpl<J>
     return_stack: Vec<u8>,
     instruction_factory: J,
     system_colors: [u8;6],
+    should_terminate: bool,
 }
 
 impl<J> Uxn for UxnImpl<J>
@@ -173,8 +174,10 @@ J: InstructionFactory,
         // TODO figure out the default colors
         let system_colors = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
 
+        let should_terminate = false;
+
         return Ok(UxnImpl{ram, program_counter:Ok(0), working_stack: Vec::new(),
-        return_stack: Vec::new(), instruction_factory, system_colors});
+        return_stack: Vec::new(), instruction_factory, system_colors, should_terminate});
     }
 
     // TODO pass in device list object to this function
@@ -182,7 +185,7 @@ J: InstructionFactory,
     // has owns mutable reference to device list. write_to_device
     // uses this list, all other functions are the same
     // at end of run the object goes out of scope
-    pub fn run<K: DeviceList>(&mut self, vector: u16, devices: K) -> Result<(), UxnError>
+    pub fn run<K: DeviceList>(&mut self, vector: u16, devices: K) -> Result<UxnStatus, UxnError>
     {
         self.set_program_counter(vector);
 
@@ -194,12 +197,12 @@ J: InstructionFactory,
         loop {
             let instr = uxn_with_devices.read_next_byte_from_ram();
             if instr == Err(UxnError::OutOfRangeMemoryAddress) {
-                return Ok(());
+                return Ok(UxnStatus::Halt);
             }
             let instr = instr.unwrap();
 
             if instr == 0x0 {
-                return Ok(());
+                return Ok(UxnStatus::Halt);
             }
 
             // get the operation that the instruction represents
@@ -208,6 +211,10 @@ J: InstructionFactory,
             // call its handler
             // TODO I don't think I need a box around this
             op.execute(Box::new(&mut uxn_with_devices))?;
+
+            if uxn_with_devices.uxn.should_terminate {
+                return Ok(UxnStatus::Terminate);
+            }
         }
     }
 }
@@ -251,6 +258,10 @@ J: InstructionFactory,
         self.system_colors[system_color_to_index(slot)]
     }
 
+    fn start_termination(&mut self) {
+        self.should_terminate = true;
+    }
+
     fn get_working_stack_iter(&self) -> std::slice::Iter<u8> {
         self.working_stack.iter()
     }
@@ -270,9 +281,15 @@ mod tests {
     struct MockInstruction {
         byte: u8,
         ret_vec: Rc<RefCell<Vec<u8>>>,
+        is_terminate_instruction: bool,
     }
     impl Instruction for MockInstruction {
-        fn execute(&self, _uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError> {
+        fn execute(&self, uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError> {
+            if self.is_terminate_instruction {
+                uxn.write_to_device(0x99, 0x99);
+            }
+
+
             self.ret_vec.borrow_mut().push(self.byte);
             Ok(())
         }
@@ -280,23 +297,46 @@ mod tests {
 
     struct MockInstructionFactory {
         ret_vec : Rc<RefCell<Vec<u8>>>,
+        terminate_instruction: u8, // special byte, that when encountered will lead to 
+                                   // 'start_termination' being called on the uxn
     }
     impl MockInstructionFactory {
-        fn new() -> Self {
-            MockInstructionFactory{ret_vec: Rc::new(RefCell::new(Vec::<u8>::new())),}
+        fn new(terminate_instruction: u8) -> Self {
+            MockInstructionFactory{ret_vec: Rc::new(RefCell::new(Vec::<u8>::new())),
+            terminate_instruction}
         }
     }
     impl InstructionFactory for MockInstructionFactory {
         fn from_byte(&self, byte: u8) -> Box<dyn Instruction> {
-            return Box::new(MockInstruction{byte: byte, ret_vec: Rc::clone(&self.ret_vec)});
+            let is_terminate_instruction = if byte == self.terminate_instruction {
+                true
+            } else {
+                false
+            };
+            return Box::new(MockInstruction{byte: byte, ret_vec: Rc::clone(&self.ret_vec), is_terminate_instruction});
         }
     }
 
-    struct MockDeviceList {}
+    struct MockDeviceList {
+        err_writer: Vec<u8>,
+    }
+
+    impl MockDeviceList {
+        fn new() -> Self {
+            MockDeviceList{err_writer: Vec::new()}
+        }
+    }
+
     impl DeviceList for MockDeviceList {
         type DebugWriter = Vec<u8>;
 
-        fn write_to_device(&mut self, _device_address: u8, _val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
+        fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
+
+            // special code in integration tests to trigger termination
+            if device_address == 0x99 && val == 0x99 {
+                return DeviceWriteReturnCode::WriteToSystemDevice(0xf, &mut self.err_writer);
+            }
+
             return DeviceWriteReturnCode::Success;
         }
 
@@ -314,10 +354,13 @@ mod tests {
 
         let mut uxn = UxnImpl::new(
             rom.into_iter(),
-            MockInstructionFactory::new())?;
-        uxn.run(0x102, MockDeviceList{})?;
+            MockInstructionFactory::new(0xff))?;
+        let res = uxn.run(0x102, MockDeviceList::new())?;
 
         assert_eq!(vec!(0xcc, 0xdd), *uxn.instruction_factory.ret_vec.borrow());
+
+        assert_eq!(UxnStatus::Halt, res);
+
         Ok(())
     }
 
@@ -331,12 +374,33 @@ mod tests {
 
         let mut uxn = UxnImpl::new(
             rom.into_iter(),
-            MockInstructionFactory::new())?;
-        uxn.run(0xfffd, MockDeviceList{})?;
+            MockInstructionFactory::new(0xff))?;
+        let res = uxn.run(0xfffd, MockDeviceList::new())?;
 
         // the instructions at addresses 0xfffd, 0xfffe, 0xffff should have been
         // executed
         assert_eq!(vec!(0xaa, 0xaa, 0xaa), *uxn.instruction_factory.ret_vec.borrow());
+
+        assert_eq!(UxnStatus::Halt, res);
+
+        Ok(())
+    }
+    
+    #[test]
+    fn test_run_terminate() -> Result<(), UxnError> {
+        // 4th byte is terminate byte, so program should stop there
+        let rom : Vec<u8> = vec!(0xaa, 0xbb, 0xcc, 0xff, 0xdd);
+
+        let mut uxn = UxnImpl::new(
+            rom.into_iter(),
+            MockInstructionFactory::new(0xff))?;
+
+        let res = uxn.run(0x100, MockDeviceList::new())?;
+
+        assert_eq!(vec!(0xaa, 0xbb, 0xcc, 0xff), *uxn.instruction_factory.ret_vec.borrow());
+
+        assert_eq!(UxnStatus::Terminate, res);
+
         Ok(())
     }
 
@@ -402,6 +466,10 @@ mod tests {
             }
 
             fn get_system_color(&self, _slot: UxnSystemColor) -> u8 {
+                panic!("should not be called");
+            }
+
+            fn start_termination(&mut self) {
                 panic!("should not be called");
             }
 
@@ -515,6 +583,10 @@ mod tests {
                 panic!("should not be called");
             }
 
+            fn start_termination(&mut self) {
+                panic!("should not be called");
+            }
+
             fn get_working_stack_iter(&self) -> std::slice::Iter<u8> {
                 return self.mock_working_stack.iter();
             }
@@ -593,7 +665,7 @@ mod tests {
     fn test_set_get_stack_index() -> Result<(), UxnError> {
         let mut uxn = UxnImpl::new(
             vec!().into_iter(),
-            MockInstructionFactory::new())?;
+            MockInstructionFactory::new(0xff))?;
 
         uxn.push_to_working_stack(0x2)?;
         uxn.push_to_working_stack(0x3)?;
@@ -629,7 +701,7 @@ mod tests {
     fn test_set_get_system_color() -> Result<(), UxnError> {
         let mut uxn = UxnImpl::new(
             vec!().into_iter(),
-            MockInstructionFactory::new())?;
+            MockInstructionFactory::new(0xff))?;
 
         let test_cases = [
             (UxnSystemColor::Red1, 12),
@@ -653,7 +725,7 @@ mod tests {
     fn test_get_stack_iter() -> Result<(), UxnError> {
         let mut uxn = UxnImpl::new(
             vec!().into_iter(),
-            MockInstructionFactory::new())?;
+            MockInstructionFactory::new(0xff))?;
 
         uxn.push_to_working_stack(0x2)?;
         uxn.push_to_working_stack(0x3)?;
