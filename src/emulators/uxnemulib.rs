@@ -18,6 +18,7 @@ use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
 
 use crate::instruction;
+use crate::emulators::uxn;
 
 /// A rust implementation of the uxn virtual machine
 #[derive(Parser)]
@@ -43,8 +44,6 @@ impl fmt::Display for RomReadError {
 }
 
 impl Error for RomReadError {}
-
-use crate::emulators::uxn;
 
 struct MyWindowHandler<J: instruction::InstructionFactory, K: Write> {
     uxn: uxn::UxnImpl<J>,
@@ -89,9 +88,9 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     let rom = rom.map(|b| b.unwrap());
     let instruction_factory_impl = OpObjectFactory{};
 
-    let mut uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
+    let uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
 
-    let mut console_device = Console::new();
+    let console_device = Console::new();
 
 
 
@@ -99,5 +98,4 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     window.run_loop(MyWindowHandler{
         uxn, console_device, stderr_writer: other_config.stderr_writer,
     });
-    return Ok(());
 }
