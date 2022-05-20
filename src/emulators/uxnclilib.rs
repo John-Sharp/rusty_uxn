@@ -21,6 +21,9 @@ pub struct Cli {
     /// Rom to run
     #[clap(parse(from_os_str))]
     pub rom: std::path::PathBuf,
+
+    /// Initial console input for uxn virtual machine
+    pub input: String,
 }
 
 pub struct Config<J: Write> {
@@ -58,20 +61,43 @@ pub fn run<J: Write>(cli_config: Cli, mut other_config: Config<J>) -> Result<(),
 
     let mut console_device = Console::new();
 
-    loop {
+    let mut input_iter = cli_config.input.bytes();
+
+    // initial run of program
+    {
         let mut device_list: HashMap::<u8, DeviceEntry<&mut J>> = HashMap::new();
         device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.stderr_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
         let device_list = DeviceListImpl::new(device_list);
 
-
         let res = uxn.run(uxn::INIT_VECTOR, device_list)?;
 
         match res {
-            UxnStatus::Terminate => { break; },
+            UxnStatus::Terminate => { return Ok(()); },
             UxnStatus::Halt => {},
         }
     }
+
+    // for the input given on the command line, make each byte of it, in turn, available through
+    // the console device and trigger the console input vector
+    for c in cli_config.input.bytes() {
+        console_device.provide_input(c);
+        let console_vector = console_device.read_vector();
+        let mut device_list: HashMap::<u8, DeviceEntry<&mut J>> = HashMap::new();
+        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.stderr_writer));
+        device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
+        let device_list = DeviceListImpl::new(device_list);
+
+        let res = uxn.run(console_vector, device_list)?;
+
+        match res {
+            UxnStatus::Terminate => { return Ok(()); },
+            UxnStatus::Halt => {},
+        }
+    }
+
+    // TODO read input from stdin, byte by byte, make available through the console device
+    // and trigger the console input vector
 
     return Ok(());
 }

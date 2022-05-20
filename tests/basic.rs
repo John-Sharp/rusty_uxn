@@ -18,7 +18,7 @@ fn push_and_debug() {
 
     fs::write(&tmp_file_path, &prog).expect("Failed to write test program");
 
-    let cli_options = uxnclilib::Cli{rom: tmp_file_path};
+    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: "".to_string()};
     let mut stderr_output = Vec::new();
     let config = uxnclilib::Config{stderr_writer: &mut stderr_output};
 

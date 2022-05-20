@@ -25,3 +25,7 @@ required-features= ["emu"]
 [[bin]]
 name = "uxnasm"
 required-features= ["asm"]
+
+[[bin]]
+name = "uxncli"
+required-features= ["emu"]
