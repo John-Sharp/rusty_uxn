@@ -2,6 +2,7 @@ use clap::Parser;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
+use std::io;
 use std::io::BufReader;
 use std::io::Read;
 use std::collections::HashMap;
@@ -45,13 +46,13 @@ impl fmt::Display for RomReadError {
 
 impl Error for RomReadError {}
 
-struct MyWindowHandler<J: instruction::InstructionFactory, K: Write> {
+struct MyWindowHandler<J: instruction::InstructionFactory, K: Write, L: Write, M: Write> {
     uxn: uxn::UxnImpl<J>,
-    console_device: Console,
-    stderr_writer: K,
+    console_device: Console<L, M>,
+    debug_writer: K,
 }
 
-impl<J: instruction::InstructionFactory, K: Write>  WindowHandler for MyWindowHandler<J, K>
+impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHandler for MyWindowHandler<J, K, L, M>
 {
     fn on_draw(&mut self, _helper: &mut WindowHelper, graphics: &mut Graphics2D)
     {
@@ -90,8 +91,7 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
 
     let uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
 
-    let console_device = Console::new();
-
+    let console_device = Console::new(io::stdout(), io::stderr());
 
 
     let window = Window::new_centered("Title", (512, 320)).unwrap();

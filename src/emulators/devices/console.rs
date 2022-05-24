@@ -2,16 +2,24 @@ use crate::emulators::uxn::device::Device;
 use std::io;
 use std::io::Write;
 
-pub struct Console {
+pub struct Console<J, K>
+    where J: io::Write, 
+          K: io::Write,
+{
     vector: [u8; 2],
     received_input: u8,
+    stdout_writer: J,
+    stderr_writer: K,
 }
 
-impl Console {
-    pub fn new() -> Self {
+impl<J, K> Console<J, K>
+    where J: io::Write,
+          K: io::Write,
+{
+    pub fn new(stdout_writer: J, stderr_writer: K) -> Self {
         let vector = [0u8; 2];
         let received_input = 0;
-        Console{vector, received_input}
+        Console{vector, received_input, stdout_writer, stderr_writer,}
     }
 
     pub fn read_vector(&self) -> u16 {
@@ -23,7 +31,10 @@ impl Console {
     }
 }
 
-impl Device for Console {
+impl<J, K> Device for Console<J, K>
+    where J: io::Write,
+          K: io::Write,
+{
     fn write(&mut self, port: u8, val: u8) {
         if port > 0xf {
             panic!("attempting to write to port out of range");
@@ -37,12 +48,12 @@ impl Device for Console {
                 self.vector[1] = val;
             },
             0x8 => {
-                print!("{}", val as char);
-                io::stdout().flush().expect("error writing to stdout");
+                write!(self.stdout_writer, "{}", val as char)
+                    .expect("error writing to stdout");
             },
             0x9 => {
-                eprint!("{}", val as char);
-                io::stderr().flush().expect("error writing to stderr");
+                write!(self.stderr_writer, "{}", val as char)
+                    .expect("error writing to stdout");
             },
             _ => {}
         }
@@ -72,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_set_get_vector() {
-        let mut console = Console::new();
+        let mut console = Console::new(Vec::new(), Vec::new());
 
         let initial_vector = console.read_vector();
         assert_eq!(initial_vector, 0);
@@ -89,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_read() {
-        let mut console = Console::new();
+        let mut console = Console::new(Vec::new(), Vec::new());
 
         // initial read should return 0x00
         assert_eq!(console.read(0x2), 0x00);

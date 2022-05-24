@@ -26,8 +26,10 @@ pub struct Cli {
     pub input: String,
 }
 
-pub struct Config<J: Write> {
-    pub stderr_writer: J,
+pub struct Config<J: Write, K: Write, L: Write> {
+    pub stdout_writer: J, // used by console device for stdout
+    pub stderr_writer: K, // used by console device for stderr
+    pub debug_writer: L,  // used by system device for debug output
 }
 
 // TODO share this with uxnemu
@@ -44,7 +46,7 @@ impl fmt::Display for RomReadError {
 
 impl Error for RomReadError {}
 
-pub fn run<J: Write>(cli_config: Cli, mut other_config: Config<J>) -> Result<(), Box<dyn Error>> {
+pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Config<J, K, L>) -> Result<(), Box<dyn Error>> {
     let rom = match File::open(cli_config.rom.as_path()) {
         Ok(fp) => fp,
         Err(_err) => {
@@ -59,14 +61,16 @@ pub fn run<J: Write>(cli_config: Cli, mut other_config: Config<J>) -> Result<(),
 
     let mut uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
 
-    let mut console_device = Console::new();
+    let mut console_device = Console::new(
+        other_config.stdout_writer,
+        other_config.stdout_writer);
 
     let mut input_iter = cli_config.input.bytes();
 
     // initial run of program
     {
         let mut device_list: HashMap::<u8, DeviceEntry<&mut J>> = HashMap::new();
-        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.stderr_writer));
+        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
         let device_list = DeviceListImpl::new(device_list);
 
