@@ -49,6 +49,8 @@ impl<J, K> Device for Console<J, K>
             0x8 => {
                 write!(self.stdout_writer, "{}", val as char)
                     .expect("error writing to stdout");
+                self.stdout_writer.flush()
+                    .expect("error flushing stdout");
             },
             0x9 => {
                 write!(self.stderr_writer, "{}", val as char)
