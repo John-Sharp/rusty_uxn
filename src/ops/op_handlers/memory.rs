@@ -237,18 +237,27 @@ pub fn deo_handler(
     // get device address to write to from working/return stack
     let device_address = wrapper.pop()?;
 
-    // pop byte from working/return stack
-    let value = wrapper.pop()?;
-
-    // write byte to device responsible for device address
-    wrapper.write_to_device(device_address, value);
-
-    // if in short mode get another byte from working/return stack
-    // and write to device
     if short == true {
+        let value_lo = wrapper.pop()?;
+        let value_hi = wrapper.pop()?;
+
+        wrapper.write_to_device(device_address, value_hi);
+
+        let device_address = if let Some(device_address) = device_address.checked_add(1) {
+            device_address
+        } else {
+            return Err(UxnError::UnrecognisedDevice);
+        };
+
+        wrapper.write_to_device(device_address, value_lo);
+    } else {
+        // pop byte from working/return stack
         let value = wrapper.pop()?;
+
+        // write byte to device responsible for device address
         wrapper.write_to_device(device_address, value);
     }
+
     return Ok(());
 }
 
@@ -752,11 +761,11 @@ mod tests {
         );
 
         // two write_to_device function calls should be made, writing to the
-        // same device address, but with the first and second byte of the
-        // short
+        // the device address with the second byte of the
+        // short and the device address + 1 with the first
         assert_eq!(
             mock_uxn.write_to_device_arguments_received.into_inner(),
-            VecDeque::from([(0xaa, 0xba), (0xaa, 0xc1)])
+            VecDeque::from([(0xaa, 0xc1), (0xab, 0xba)])
         );
 
         // since in keep mode what was popped from the stack should be pushed
