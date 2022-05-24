@@ -1,6 +1,5 @@
 use crate::emulators::uxn::device::Device;
 use std::io;
-use std::io::Write;
 
 pub struct Console<J, K>
     where J: io::Write, 
@@ -53,7 +52,7 @@ impl<J, K> Device for Console<J, K>
             },
             0x9 => {
                 write!(self.stderr_writer, "{}", val as char)
-                    .expect("error writing to stdout");
+                    .expect("error writing to stderr");
             },
             _ => {}
         }
@@ -117,5 +116,23 @@ mod tests {
         // provide some different inputted text
         console.provide_input(0x7b);
         assert_eq!(console.read(0x2), 0x7b);
+    }
+
+    #[test]
+    fn test_write_stdout_stderr() {
+        let mut stdout_writer = Vec::new();
+        let mut stderr_writer = Vec::new();
+
+        let mut console = Console::new(&mut stdout_writer, &mut stderr_writer);
+
+        console.write(0x8, 0x01);
+        console.write(0x8, 0x02);
+        console.write(0x9, 0x04);
+        console.write(0x8, 0x03);
+        console.write(0x9, 0x05);
+        console.write(0x9, 0x06);
+
+        assert_eq!(stdout_writer, vec![0x01, 0x02, 0x03]);
+        assert_eq!(stderr_writer, vec![0x04, 0x05, 0x06]);
     }
 }

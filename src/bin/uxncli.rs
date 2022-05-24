@@ -3,7 +3,10 @@ use std::io;
 
 fn main() {
     let args = rusty_uxn::emulators::uxnclilib::Cli::parse();
-    let other_config = rusty_uxn::emulators::uxnclilib::Config{stderr_writer: io::stderr()};
+    let other_config = rusty_uxn::emulators::uxnclilib::Config{
+        stdout_writer: io::stdout(),
+        stderr_writer: io::stderr(),
+        debug_writer: io::stderr()};
 
     if let Err(e) = rusty_uxn::emulators::uxnclilib::run(args, other_config) {
         println!("{}", e);

@@ -63,13 +63,11 @@ pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Conf
 
     let mut console_device = Console::new(
         other_config.stdout_writer,
-        other_config.stdout_writer);
-
-    let mut input_iter = cli_config.input.bytes();
+        other_config.stderr_writer);
 
     // initial run of program
     {
-        let mut device_list: HashMap::<u8, DeviceEntry<&mut J>> = HashMap::new();
+        let mut device_list: HashMap::<u8, DeviceEntry<&mut L>> = HashMap::new();
         device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
         let device_list = DeviceListImpl::new(device_list);
@@ -87,8 +85,8 @@ pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Conf
     for c in cli_config.input.bytes() {
         console_device.provide_input(c);
         let console_vector = console_device.read_vector();
-        let mut device_list: HashMap::<u8, DeviceEntry<&mut J>> = HashMap::new();
-        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.stderr_writer));
+        let mut device_list: HashMap::<u8, DeviceEntry<&mut L>> = HashMap::new();
+        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
         let device_list = DeviceListImpl::new(device_list);
 
@@ -99,9 +97,6 @@ pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Conf
             UxnStatus::Halt => {},
         }
     }
-
-    // TODO read input from stdin, byte by byte, make available through the console device
-    // and trigger the console input vector
 
     return Ok(());
 }

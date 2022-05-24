@@ -23,13 +23,13 @@ fn push_and_debug() {
     let mut stderr_output = Vec::new();
     let mut debug_output = Vec::new();
     let config = uxnclilib::Config{
-        stdout_output: &mut stdout_output,
+        stdout_writer: &mut stdout_output,
         stderr_writer: &mut stderr_output,
-        debug_output: &mut debug_output};
+        debug_writer: &mut debug_output};
 
     uxnclilib::run(cli_options, config).expect("Failed to execute test program");
 
-    // the debug output should be printed on stderr and should give the contents of the working
+    // the debug output should be printed to the debug_writer and should give the contents of the working
     // stack followed by the contents of the return stack
-    assert_eq!(String::from_utf8(stderr_output).unwrap(), "<wst> 22 33\n<rst> 44 55\n");
+    assert_eq!(String::from_utf8(debug_output).unwrap(), "<wst> 22 33\n<rst> 44 55\n");
 }

@@ -66,7 +66,7 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
     fn on_start(&mut self, _helper: &mut WindowHelper, _info: WindowStartupInfo) {
         // TODO run uxn from init vector
         let mut device_list: HashMap::<u8, DeviceEntry<&mut K>> = HashMap::new();
-        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut self.stderr_writer));
+        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut self.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut self.console_device));
         let device_list = DeviceListImpl::new(device_list);
 
@@ -96,6 +96,6 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
 
     let window = Window::new_centered("Title", (512, 320)).unwrap();
     window.run_loop(MyWindowHandler{
-        uxn, console_device, stderr_writer: other_config.stderr_writer,
+        uxn, console_device, debug_writer: other_config.stderr_writer,
     });
 }
