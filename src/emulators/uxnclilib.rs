@@ -23,6 +23,7 @@ pub struct Cli {
     pub rom: std::path::PathBuf,
 
     /// Initial console input for uxn virtual machine
+    #[clap(default_value_t = String::from(""))]
     pub input: String,
 }
 
