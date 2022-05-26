@@ -27,10 +27,11 @@ pub struct Cli {
     pub input: String,
 }
 
-pub struct Config<J: Write, K: Write, L: Write> {
+pub struct Config<J: Write, K: Read, L: Write, M: Write> {
     pub stdout_writer: J, // used by console device for stdout
-    pub stderr_writer: K, // used by console device for stderr
-    pub debug_writer: L,  // used by system device for debug output
+    pub stdin_reader: K,  // used for reading console input and passing on to console device
+    pub stderr_writer: L, // used by console device for stderr
+    pub debug_writer: M,  // used by system device for debug output
 }
 
 // TODO share this with uxnemu
@@ -47,7 +48,7 @@ impl fmt::Display for RomReadError {
 
 impl Error for RomReadError {}
 
-pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Config<J, K, L>) -> Result<(), Box<dyn Error>> {
+pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_config: Config<J, K, L, M>) -> Result<(), Box<dyn Error>> {
     let rom = match File::open(cli_config.rom.as_path()) {
         Ok(fp) => fp,
         Err(_err) => {
@@ -68,7 +69,7 @@ pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Conf
 
     // initial run of program
     {
-        let mut device_list: HashMap::<u8, DeviceEntry<&mut L>> = HashMap::new();
+        let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
         device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
         let device_list = DeviceListImpl::new(device_list);
@@ -86,7 +87,7 @@ pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Conf
     for c in cli_config.input.bytes() {
         console_device.provide_input(c);
         let console_vector = console_device.read_vector();
-        let mut device_list: HashMap::<u8, DeviceEntry<&mut L>> = HashMap::new();
+        let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
         device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
         let device_list = DeviceListImpl::new(device_list);
@@ -96,6 +97,31 @@ pub fn run<J: Write, K: Write, L: Write>(cli_config: Cli, mut other_config: Conf
         match res {
             UxnStatus::Terminate => { return Ok(()); },
             UxnStatus::Halt => {},
+        }
+    }
+
+    // for input provided via stdin, make each byte available through the console device and
+    // trigger the console input vector
+    for c in other_config.stdin_reader.bytes() {
+        match c {
+            Ok(c) => {
+                console_device.provide_input(c);
+                let console_vector = console_device.read_vector();
+                let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
+                device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
+                device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
+                let device_list = DeviceListImpl::new(device_list);
+
+                let res = uxn.run(console_vector, device_list)?;
+
+                match res {
+                    UxnStatus::Terminate => { return Ok(()); },
+                    UxnStatus::Halt => {},
+                }
+            },
+            Err(e) => {
+                return Err(Box::new(e));
+            }
         }
     }
 
