@@ -3,7 +3,7 @@ use crate::instruction::InstructionFactory;
 pub const INIT_VECTOR: u16 = 0x100;
 
 pub mod device; 
-use device::{DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface};
+use device::{DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface, MainRamInterfaceError};
 use crate::emulators::devices;
 use crate::emulators::devices::system::{UxnSystemInterface, UxnSystemColor};
 use crate::uxninterface::{Uxn, UxnError, UxnStatus, UxnWithDevices};
@@ -98,7 +98,19 @@ pub struct UxnImpl<J>
 impl<J> MainRamInterface for UxnImpl<J>
 where
 J: InstructionFactory,
-{}
+{
+    fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+        let end_address: usize = usize::from(address) + usize::from(num_bytes);
+
+        let ret = if let Some(s) = self.ram.get(usize::from(address)..end_address) {
+            s
+        } else {
+            return Err(MainRamInterfaceError::AddressOutOfBounds);
+        };
+
+        return Ok(Vec::from(ret));
+    }
+}
 
 impl<J> Uxn for UxnImpl<J>
 where
@@ -486,7 +498,11 @@ mod tests {
                 panic!("should not be called");
             }
         }
-        impl MainRamInterface for MockUxn {}
+        impl MainRamInterface for MockUxn {
+            fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+                panic!("should not be called");
+            }
+        }
 
         struct MockDeviceList {}
 
@@ -601,7 +617,11 @@ mod tests {
                 return self.mock_return_stack.iter();
             }
         }
-        impl MainRamInterface for MockUxn {}
+        impl MainRamInterface for MockUxn {
+            fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+                panic!("should not be called");
+            }
+        }
 
         struct MockDeviceList {
             debug_printer: Vec<u8>,

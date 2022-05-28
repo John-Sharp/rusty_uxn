@@ -1,5 +1,7 @@
 use crate::uxninterface::UxnError;
 use std::io;
+use std::fmt;
+use std::error::Error;
 
 #[derive(PartialEq, Debug)]
 pub enum DeviceWriteReturnCode<'a, K>
@@ -28,4 +30,23 @@ pub trait Device {
     fn read(&mut self, port: u8) -> u8;
 }
 
-pub trait MainRamInterface {}
+#[derive(Debug, PartialEq)]
+pub enum MainRamInterfaceError {
+    AddressOutOfBounds,
+}
+
+impl fmt::Display for MainRamInterfaceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MainRamInterfaceError::AddressOutOfBounds => {
+                write!(f, "attempt to access out of range memory address")
+            }
+        }
+    }
+}
+
+impl Error for MainRamInterfaceError {}
+
+pub trait MainRamInterface {
+    fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError>;
+}

@@ -1,4 +1,4 @@
-use super::super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface};
+use super::super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface, MainRamInterfaceError};
 use crate::uxninterface::UxnError;
 use std::collections::HashMap;
 use std::io::Write;
@@ -162,7 +162,11 @@ mod tests {
     }
 
     struct MockMainRamInterface {}
-    impl MainRamInterface for MockMainRamInterface {}
+    impl MainRamInterface for MockMainRamInterface {
+        fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+            panic!("should not be called");
+        }
+    }
 
     #[test]
     fn test_write() {
