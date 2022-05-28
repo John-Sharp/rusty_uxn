@@ -1,4 +1,3 @@
-use crate::emulators::uxn::device::Device;
 use std::io::Write;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -45,10 +44,8 @@ impl<'a, J, K> System<'a, J, K>
             debug_writer,
         }
     }
-}
 
-impl<'a, J: UxnSystemInterface, K: Write> Device for System<'a, J, K> {
-    fn write(&mut self, port: u8, val: u8) {
+    pub fn write(&mut self, port: u8, val: u8) {
         match port {
             0x0..=0x1 => {
                 // not used
@@ -117,7 +114,7 @@ impl<'a, J: UxnSystemInterface, K: Write> Device for System<'a, J, K> {
     }
 
 
-    fn read(&mut self, port: u8) -> u8 {
+    pub fn read(&mut self, port: u8) -> u8 {
         match port {
             0x0..=0x1 => {
                 // not used

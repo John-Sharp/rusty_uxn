@@ -1,4 +1,4 @@
-use crate::emulators::uxn::device::Device;
+use crate::emulators::uxn::device::{Device, MainRamInterface};
 use std::io;
 
 pub struct Console<J, K>
@@ -34,7 +34,7 @@ impl<J, K> Device for Console<J, K>
     where J: io::Write,
           K: io::Write,
 {
-    fn write(&mut self, port: u8, val: u8) {
+    fn write(&mut self, port: u8, val: u8, _main_ram: &mut dyn MainRamInterface) {
         if port > 0xf {
             panic!("attempting to write to port out of range");
         }
@@ -82,6 +82,9 @@ impl<J, K> Device for Console<J, K>
 mod tests {
     use super::*;
 
+    struct MockMainRamInterface {}
+    impl MainRamInterface for MockMainRamInterface {}
+
     #[test]
     fn test_set_get_vector() {
         let mut console = Console::new(Vec::new(), Vec::new());
@@ -89,8 +92,8 @@ mod tests {
         let initial_vector = console.read_vector();
         assert_eq!(initial_vector, 0);
 
-        console.write(0x0, 0xab);
-        console.write(0x1, 0xcd);
+        console.write(0x0, 0xab, &mut MockMainRamInterface{});
+        console.write(0x1, 0xcd, &mut MockMainRamInterface{});
 
         let vector = console.read_vector();
         assert_eq!(vector, 0xabcd);
@@ -127,12 +130,12 @@ mod tests {
 
         let mut console = Console::new(&mut stdout_writer, &mut stderr_writer);
 
-        console.write(0x8, 0x01);
-        console.write(0x8, 0x02);
-        console.write(0x9, 0x04);
-        console.write(0x8, 0x03);
-        console.write(0x9, 0x05);
-        console.write(0x9, 0x06);
+        console.write(0x8, 0x01, &mut MockMainRamInterface{});
+        console.write(0x8, 0x02, &mut MockMainRamInterface{});
+        console.write(0x9, 0x04, &mut MockMainRamInterface{});
+        console.write(0x8, 0x03, &mut MockMainRamInterface{});
+        console.write(0x9, 0x05, &mut MockMainRamInterface{});
+        console.write(0x9, 0x06, &mut MockMainRamInterface{});
 
         assert_eq!(stdout_writer, vec![0x01, 0x02, 0x03]);
         assert_eq!(stderr_writer, vec![0x04, 0x05, 0x06]);

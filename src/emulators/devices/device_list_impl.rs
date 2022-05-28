@@ -29,7 +29,7 @@ impl<'a, J> DeviceList for DeviceListImpl<'a, J>
 {
     type DebugWriter = J;
 
-    fn write_to_device(&mut self, device_address: u8, val: u8, _main_ram: &mut dyn MainRamInterface) -> DeviceWriteReturnCode<J> {
+    fn write_to_device(&mut self, device_address: u8, val: u8, main_ram: &mut dyn MainRamInterface) -> DeviceWriteReturnCode<J> {
         // index of device is first nibble of device address
         let device_index = device_address >> 4;
 
@@ -51,7 +51,7 @@ impl<'a, J> DeviceList for DeviceListImpl<'a, J>
         };
 
         // pass port and value through to device
-        device.write(device_port, val);
+        device.write(device_port, val, main_ram);
 
         return DeviceWriteReturnCode::Success;
     }
@@ -106,7 +106,7 @@ mod tests {
     }
 
     impl Device for MockDeviceA {
-        fn write(&mut self, port: u8, val: u8) {
+        fn write(&mut self, port: u8, val: u8, _main_ram: &mut dyn MainRamInterface) {
             self.write_arguments_received
                 .borrow_mut()
                 .push_back((port, val));
@@ -143,7 +143,7 @@ mod tests {
     }
 
     impl Device for MockDeviceB {
-        fn write(&mut self, port: u8, val: u8) {
+        fn write(&mut self, port: u8, val: u8, _main_ram: &mut dyn MainRamInterface) {
             self.write_arguments_received
                 .borrow_mut()
                 .push_back((port, val));

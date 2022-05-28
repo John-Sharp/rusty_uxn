@@ -3,7 +3,7 @@ use crate::instruction::InstructionFactory;
 pub const INIT_VECTOR: u16 = 0x100;
 
 pub mod device; 
-use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface};
+use device::{DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface};
 use crate::emulators::devices;
 use crate::emulators::devices::system::{UxnSystemInterface, UxnSystemColor};
 use crate::uxninterface::{Uxn, UxnError, UxnStatus, UxnWithDevices};
