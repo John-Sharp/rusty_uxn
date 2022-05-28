@@ -3,7 +3,7 @@ use crate::instruction::InstructionFactory;
 pub const INIT_VECTOR: u16 = 0x100;
 
 pub mod device; 
-use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
+use device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface};
 use crate::emulators::devices;
 use crate::emulators::devices::system::{UxnSystemInterface, UxnSystemColor};
 use crate::uxninterface::{Uxn, UxnError, UxnStatus, UxnWithDevices};
@@ -58,7 +58,7 @@ impl <'a, J, K> Uxn for UxnWithDevicesImpl<'a, J, K>
 }
 
 impl <'a, J, K> UxnWithDevices for UxnWithDevicesImpl<'a, J, K>
-    where J: Uxn + UxnSystemInterface,
+    where J: Uxn + UxnSystemInterface + MainRamInterface,
           K: DeviceList,
 {
     fn read_from_device(&mut self, device_address: u8) -> Result<u8, UxnError> {
@@ -73,7 +73,7 @@ impl <'a, J, K> UxnWithDevices for UxnWithDevicesImpl<'a, J, K>
     }
 
     fn write_to_device(&mut self, device_address: u8, val: u8) {
-        match self.device_list.write_to_device(device_address, val) {
+        match self.device_list.write_to_device(device_address, val, self.uxn) {
             DeviceWriteReturnCode::Success => {},
             DeviceWriteReturnCode::WriteToSystemDevice(port, debug_printer) => {
                 let mut system = devices::system::System::new(self.uxn, debug_printer);
@@ -94,6 +94,11 @@ pub struct UxnImpl<J>
     system_colors: [u8;6],
     should_terminate: bool,
 }
+
+impl<J> MainRamInterface for UxnImpl<J>
+where
+J: InstructionFactory,
+{}
 
 impl<J> Uxn for UxnImpl<J>
 where
@@ -330,7 +335,7 @@ mod tests {
     impl DeviceList for MockDeviceList {
         type DebugWriter = Vec<u8>;
 
-        fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
+        fn write_to_device(&mut self, device_address: u8, val: u8, _main_ram: &mut dyn MainRamInterface) -> DeviceWriteReturnCode<Self::DebugWriter> {
 
             // special code in integration tests to trigger termination
             if device_address == 0x99 && val == 0x99 {
@@ -481,13 +486,14 @@ mod tests {
                 panic!("should not be called");
             }
         }
+        impl MainRamInterface for MockUxn {}
 
         struct MockDeviceList {}
 
         impl DeviceList for MockDeviceList {
             type DebugWriter = Vec<u8>;
 
-            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
+            fn write_to_device(&mut self, device_address: u8, val: u8, _main_ram: &mut dyn MainRamInterface) -> DeviceWriteReturnCode<Self::DebugWriter> {
                 assert_eq!(device_address, 0x35);
                 assert_eq!(val, 0x22);
 
@@ -595,6 +601,7 @@ mod tests {
                 return self.mock_return_stack.iter();
             }
         }
+        impl MainRamInterface for MockUxn {}
 
         struct MockDeviceList {
             debug_printer: Vec<u8>,
@@ -616,7 +623,7 @@ mod tests {
             type DebugWriter = Vec<u8>;
 
 
-            fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<Self::DebugWriter> {
+            fn write_to_device(&mut self, device_address: u8, val: u8, _main_ram: &mut dyn MainRamInterface) -> DeviceWriteReturnCode<Self::DebugWriter> {
                 assert_eq!(device_address, self.expected_device_address);
                 assert_eq!(val, self.expected_val);
 

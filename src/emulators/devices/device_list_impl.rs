@@ -1,4 +1,4 @@
-use super::super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode};
+use super::super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface};
 use crate::uxninterface::UxnError;
 use std::collections::HashMap;
 use std::io::Write;
@@ -29,7 +29,7 @@ impl<'a, J> DeviceList for DeviceListImpl<'a, J>
 {
     type DebugWriter = J;
 
-    fn write_to_device(&mut self, device_address: u8, val: u8) -> DeviceWriteReturnCode<J> {
+    fn write_to_device(&mut self, device_address: u8, val: u8, _main_ram: &mut dyn MainRamInterface) -> DeviceWriteReturnCode<J> {
         // index of device is first nibble of device address
         let device_index = device_address >> 4;
 
@@ -161,6 +161,9 @@ mod tests {
         }
     }
 
+    struct MockMainRamInterface {}
+    impl MainRamInterface for MockMainRamInterface {}
+
     #[test]
     fn test_write() {
         let mut mock_device_a = MockDeviceA::new();
@@ -174,16 +177,16 @@ mod tests {
         let mut device_list = DeviceListImpl::new(device_list);
 
         // write 23 to device 0x0, port 0xb
-        let ret = device_list.write_to_device(0x0b, 23);
+        let ret = device_list.write_to_device(0x0b, 23, &mut MockMainRamInterface{});
         assert_eq!(ret, DeviceWriteReturnCode::Success);
 
 
         // write 60 to device 0x2, port 0x4
-        let ret = device_list.write_to_device(0x24, 60);
+        let ret = device_list.write_to_device(0x24, 60, &mut MockMainRamInterface{});
         assert_eq!(ret, DeviceWriteReturnCode::Success);
 
         // write 77 to device 0x3, port 0x9
-        let ret = device_list.write_to_device(0x39, 77);
+        let ret = device_list.write_to_device(0x39, 77, &mut MockMainRamInterface{});
 
         match ret {
             DeviceWriteReturnCode::WriteToSystemDevice(0x9, debug_printer) => {
