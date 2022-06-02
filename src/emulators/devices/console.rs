@@ -1,4 +1,4 @@
-use crate::emulators::uxn::device::{Device, MainRamInterface, MainRamInterfaceError};
+use crate::emulators::uxn::device::{Device, MainRamInterface};
 use std::io;
 
 pub struct Console<J, K>
@@ -81,14 +81,15 @@ impl<J, K> Device for Console<J, K>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::emulators::uxn::device::MainRamInterfaceError;
 
     struct MockMainRamInterface {}
     impl MainRamInterface for MockMainRamInterface {
-        fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+        fn read(&self, _address: u16, _num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
             panic!("should not be called");
         }
 
-        fn write(&mut self, address: u16, bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
+        fn write(&mut self, _address: u16, _bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
             panic!("should not be called");
         }
     }

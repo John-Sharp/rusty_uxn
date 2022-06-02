@@ -1,4 +1,4 @@
-use super::super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface, MainRamInterfaceError};
+use super::super::uxn::device::{Device, DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface};
 use crate::uxninterface::UxnError;
 use std::collections::HashMap;
 use std::io::Write;
@@ -86,6 +86,7 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
     use std::collections::VecDeque;
+    use crate::emulators::uxn::device::MainRamInterfaceError;
 
     struct MockDeviceA {
         pub write_arguments_received: RefCell<VecDeque<(u8, u8)>>,
@@ -163,11 +164,11 @@ mod tests {
 
     struct MockMainRamInterface {}
     impl MainRamInterface for MockMainRamInterface {
-        fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+        fn read(&self, _address: u16, _num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
             panic!("should not be called");
         }
 
-        fn write(&mut self, address: u16, bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
+        fn write(&mut self, _address: u16, _bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
             panic!("should not be called");
         }
     }
