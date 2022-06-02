@@ -166,6 +166,10 @@ mod tests {
         fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
             panic!("should not be called");
         }
+
+        fn write(&mut self, address: u16, bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
+            panic!("should not be called");
+        }
     }
 
     #[test]

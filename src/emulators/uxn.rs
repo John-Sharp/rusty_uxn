@@ -110,6 +110,19 @@ J: InstructionFactory,
 
         return Ok(Vec::from(ret));
     }
+
+    fn write(&mut self, address: u16, bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
+        let end_address = usize::from(address) + bytes.len();
+
+        let target = if let Some(t) = self.ram.get_mut(usize::from(address)..end_address) {
+            t
+        } else {
+            return Err(MainRamInterfaceError::AddressOutOfBounds);
+        };
+
+        target.clone_from_slice(bytes);
+        return Ok(bytes.len());
+    }
 }
 
 impl<J> Uxn for UxnImpl<J>
@@ -502,6 +515,10 @@ mod tests {
             fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
                 panic!("should not be called");
             }
+
+            fn write(&mut self, address: u16, bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
+                panic!("should not be called");
+            }
         }
 
         struct MockDeviceList {}
@@ -619,6 +636,10 @@ mod tests {
         }
         impl MainRamInterface for MockUxn {
             fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+                panic!("should not be called");
+            }
+
+            fn write(&mut self, address: u16, bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
                 panic!("should not be called");
             }
         }

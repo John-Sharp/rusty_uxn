@@ -60,7 +60,8 @@ impl File {
         };
 
         // TODO write 
-
+        main_ram.write(u16::from_be_bytes(self.target_address), num_bytes_read)
+            .expect("had problem reading from file and writing to memory");
     }
 }
 

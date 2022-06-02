@@ -49,4 +49,5 @@ impl Error for MainRamInterfaceError {}
 
 pub trait MainRamInterface {
     fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError>;
+    fn write(&mut self, address: u16, bytes: &[u8]) -> Result<usize, MainRamInterfaceError>;
 }
