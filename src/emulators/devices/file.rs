@@ -65,7 +65,8 @@ impl FileDevice {
             return;
         };
 
-        main_ram.write(u16::from_be_bytes(self.target_address), &mut buf)
+        main_ram.write(u16::from_be_bytes(self.target_address),
+            &mut buf[..num_bytes_read])
             .expect("had problem reading from file and writing to memory");
         self.success = u16::try_from(num_bytes_read).unwrap();
     }
@@ -102,8 +103,22 @@ impl Device for FileDevice {
         }
     }
 
-    fn read(&mut self, _port: u8) -> u8 {
-        return 0x0;
+    fn read(&mut self, port: u8) -> u8 {
+        if port > 0xf {
+            panic!("attempting to read from port out of range");
+        }
+
+        match port {
+            0x2 => {
+                return self.success.to_be_bytes()[0];
+            },
+            0x3 => {
+                return self.success.to_be_bytes()[1];
+            },
+            _ => {
+                return 0x0;
+            },
+        }
     }
 }
 
@@ -113,6 +128,8 @@ mod tests {
     use std::collections::VecDeque;
     use std::cell::RefCell;
     use crate::emulators::uxn::device::MainRamInterfaceError;
+    use uuid::Uuid;
+    use std::fs;
 
     struct MockMainRamInterface {
         read_arguments_received: RefCell<VecDeque<(u16, u16,)>>,
@@ -154,21 +171,41 @@ mod tests {
     #[test]
     fn test_file_read() {
         let mut mock_ram_interface = MockMainRamInterface::new();
-        let file_name = "some_file";
-        let mut read_values_to_return = file_name.bytes()
+
+        let tmp_file_name = format!("test_file_read_{}", Uuid::new_v4());
+        let mut tmp_file_path = std::env::temp_dir();
+        tmp_file_path.push(tmp_file_name);
+        let contents = "file contents 1234";
+        fs::write(&tmp_file_path, &contents).expect("Failed to write test program");
+        let tmp_file_path = tmp_file_path.into_os_string().into_string()
+             .expect("could not convert file path into string");
+
+        let mut read_values_to_return = tmp_file_path.bytes()
             .chain([0x0_u8,])
             .map(|b| Ok(vec!(b)))
             .collect::<VecDeque<_>>();
+
         read_values_to_return.push_back(Ok(vec!(0x0,)));
         mock_ram_interface.read_values_to_return = RefCell::new(
             read_values_to_return);
 
+        let mut write_values_to_return = VecDeque::from([
+            Ok(contents.len() - 3),
+            Ok(3),
+            Ok(0),
+        ]);
+        mock_ram_interface.write_values_to_return = RefCell::new(
+            write_values_to_return);
+
         let mut file_device = FileDevice::new();
+
+        // write to the file device, setting the address that the
+        // file name should be read from
         file_device.write(0x8, 0xaa, &mut mock_ram_interface);
         file_device.write(0x9, 0xbb, &mut mock_ram_interface);
 
         let mut expected_start_address = 0xaabb;
-        let read_arguments_expected = file_name.bytes()
+        let read_arguments_expected = tmp_file_path.bytes()
             .chain([0x0_u8,])
             .map(|_b| {
                 expected_start_address += 1;
@@ -176,9 +213,66 @@ mod tests {
             })
             .collect::<VecDeque<_>>();
 
+        // assert that the file device has queried the ram and
+        // read the file name from it
         assert_eq!(
-            mock_ram_interface.read_arguments_received.into_inner(),
-            read_arguments_expected
-        );
+            *mock_ram_interface.read_arguments_received.borrow(),
+            read_arguments_expected);
+
+        // write to the file device, setting the length to 
+        // be read
+        let chunk_length = u16::try_from(contents.len() - 3).unwrap();
+        file_device.write(0xa, chunk_length.to_be_bytes()[0], &mut mock_ram_interface);
+        file_device.write(0xb, chunk_length.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // write to the file device, setting the address the read
+        // data should be written to
+        file_device.write(0xc, 0xcc, &mut mock_ram_interface);
+        file_device.write(0xd, 0xdd, &mut mock_ram_interface);
+
+        // assert that the contents of the file is written to the correct
+        // address
+        let write_arguments_expected = (0xccdd_u16, "file contents 1".bytes()
+            .collect::<Vec<_>>());
+        assert_eq!(
+            mock_ram_interface.write_arguments_received.borrow_mut().pop_front().unwrap(),
+            write_arguments_expected);
+
+        // assert that the success field is set to correct value
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_eq!(success, chunk_length);
+
+        // read the data again
+        file_device.write(0xc, 0xcc, &mut mock_ram_interface);
+        file_device.write(0xd, 0xdd, &mut mock_ram_interface);
+
+        // assert that the remaining contents of the file is written
+        // to the correct address
+        let write_arguments_expected = (0xccdd_u16,
+            "234".bytes().collect::<Vec<_>>());
+        assert_eq!(
+            mock_ram_interface.write_arguments_received.borrow_mut().pop_front().unwrap(),
+            write_arguments_expected);
+
+        // assert that the success field is set to correct value
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_eq!(success, 3);
+
+        // read the data again, now that the whole file has been read
+        file_device.write(0xc, 0xcc, &mut mock_ram_interface);
+        file_device.write(0xd, 0xdd, &mut mock_ram_interface);
+
+        // assert that the success field is set to correct value
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_eq!(success, 0);
     }
 }
