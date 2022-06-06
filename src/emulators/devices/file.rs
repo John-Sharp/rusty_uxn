@@ -185,7 +185,6 @@ mod tests {
             .map(|b| Ok(vec!(b)))
             .collect::<VecDeque<_>>();
 
-        read_values_to_return.push_back(Ok(vec!(0x0,)));
         mock_ram_interface.read_values_to_return = RefCell::new(
             read_values_to_return);
 
@@ -274,5 +273,29 @@ mod tests {
             file_device.read(0x3),
         ]);
         assert_eq!(success, 0);
+    }
+
+    // TODO
+    // try to read from a file where the file does not exist
+    #[test]
+    fn test_file_read_non_existant() {
+        let mut mock_ram_interface = MockMainRamInterface::new();
+
+        let tmp_file_name = format!("non_existant_file_{}", Uuid::new_v4());
+        let mut tmp_file_path = std::env::temp_dir();
+        tmp_file_path.push(tmp_file_name);
+        let contents = "file contents 1234";
+        fs::write(&tmp_file_path, &contents).expect("Failed to write test program");
+        let tmp_file_path = tmp_file_path.into_os_string().into_string()
+             .expect("could not convert file path into string");
+
+        let mut read_values_to_return = tmp_file_path.bytes()
+            .chain([0x0_u8,])
+            .map(|b| Ok(vec!(b)))
+            .collect::<VecDeque<_>>();
+
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            read_values_to_return);
+
     }
 }
