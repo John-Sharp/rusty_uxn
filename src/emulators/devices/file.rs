@@ -275,17 +275,14 @@ mod tests {
         assert_eq!(success, 0);
     }
 
-    // TODO
     // try to read from a file where the file does not exist
     #[test]
-    fn test_file_read_non_existant() {
+    fn test_file_read_non_existent() {
         let mut mock_ram_interface = MockMainRamInterface::new();
 
-        let tmp_file_name = format!("non_existant_file_{}", Uuid::new_v4());
+        let tmp_file_name = format!("non_existent_file_{}", Uuid::new_v4());
         let mut tmp_file_path = std::env::temp_dir();
         tmp_file_path.push(tmp_file_name);
-        let contents = "file contents 1234";
-        fs::write(&tmp_file_path, &contents).expect("Failed to write test program");
         let tmp_file_path = tmp_file_path.into_os_string().into_string()
              .expect("could not convert file path into string");
 
@@ -293,9 +290,53 @@ mod tests {
             .chain([0x0_u8,])
             .map(|b| Ok(vec!(b)))
             .collect::<VecDeque<_>>();
-
         mock_ram_interface.read_values_to_return = RefCell::new(
             read_values_to_return);
 
+        let mut file_device = FileDevice::new();
+
+        // write to the file device, setting the address that the
+        // file name should be read from
+        file_device.write(0x8, 0xaa, &mut mock_ram_interface);
+        file_device.write(0x9, 0xbb, &mut mock_ram_interface);
+
+        let mut expected_start_address = 0xaabb;
+        let read_arguments_expected = tmp_file_path.bytes()
+            .chain([0x0_u8,])
+            .map(|_b| {
+                expected_start_address += 1;
+                return (expected_start_address-1, 1);
+            })
+            .collect::<VecDeque<_>>();
+
+        // assert that the file device has queried the ram and
+        // read the file name from it
+        assert_eq!(
+            *mock_ram_interface.read_arguments_received.borrow(),
+            read_arguments_expected);
+
+        // write to the file device, setting the length to 
+        // be read (this is an arbitrary value of 5 bytes in this case)
+        let chunk_length = 5_u16;
+        file_device.write(0xa, chunk_length.to_be_bytes()[0], &mut mock_ram_interface);
+        file_device.write(0xb, chunk_length.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // write to the file device, setting the address the read
+        // data should be written to (not that it will be written,
+        // since the file doesn't exist)
+        file_device.write(0xc, 0xcc, &mut mock_ram_interface);
+        file_device.write(0xd, 0xdd, &mut mock_ram_interface);
+
+        // assert that the success field is set to correct value of 0
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_eq!(success, 0);
+
+        // assert that nothing has been written to ram
+        assert_eq!(
+            mock_ram_interface.write_arguments_received.into_inner(),
+            VecDeque::new());
     }
 }
