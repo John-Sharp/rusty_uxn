@@ -504,10 +504,14 @@ mod tests {
             format!("???? {}\n", large_test_file_name),
         ]);
         let total_len = entry_len * expected_contents.len();
+        // set chunk length to be slightly more than needed to fetch
+        // two entries but will require two fetches to fetch the entire
+        // directory
+        let chunk_len = 2 * entry_len + 4;
 
-        // TODO add paging
         let write_values_to_return = VecDeque::from([
-            Ok(total_len),
+            Ok(chunk_len),
+            Ok(entry_len),
             Ok(0),
         ]);
         mock_ram_interface.write_values_to_return = RefCell::new(
@@ -537,31 +541,73 @@ mod tests {
 
         // write to the file device, setting the length to 
         // be read
-        let chunk_length = u16::try_from(total_len + 3).unwrap();
-        file_device.write(0xa, chunk_length.to_be_bytes()[0], &mut mock_ram_interface);
-        file_device.write(0xb, chunk_length.to_be_bytes()[1], &mut mock_ram_interface);
+        let chunk_len = u16::try_from(chunk_len).unwrap();
+        file_device.write(0xa, chunk_len.to_be_bytes()[0], &mut mock_ram_interface);
+        file_device.write(0xb, chunk_len.to_be_bytes()[1], &mut mock_ram_interface);
 
         // write to the file device, setting the address the read
         // data should be written to
         file_device.write(0xc, 0xcc, &mut mock_ram_interface);
         file_device.write(0xd, 0xdd, &mut mock_ram_interface);
 
-        // assert that the contents of the file is written to the correct
+        // assert that the contents of the directory is written to the correct
         // address
         let write_address_expected = 0xccdd_u16;
         let write_arguments_received = mock_ram_interface.write_arguments_received.borrow_mut().pop_front().unwrap();
-
         assert_eq!(write_arguments_received.0, write_address_expected);
 
+        // assert that the 'success' field has been written to with the 
+        // expected number of bytes, 2*entry_len
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_eq!(success, u16::try_from(2*entry_len).unwrap());
+
         let string_received = String::from_utf8(write_arguments_received.1).unwrap();
+        let mut received_directory_contents = string_received.split_inclusive('\n')
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+
+        // do a second write to finish off the directory
+        file_device.write(0xc, 0xcc, &mut mock_ram_interface);
+        file_device.write(0xd, 0xdd, &mut mock_ram_interface);
+
+        let write_arguments_received = mock_ram_interface.write_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(write_arguments_received.0, write_address_expected);
+
+        // assert that the 'success' field has been written to with the 
+        // expected number of bytes, entry_len
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_eq!(success, u16::try_from(entry_len).unwrap());
+
+        let string_received = String::from_utf8(write_arguments_received.1).unwrap();
+        received_directory_contents.extend(string_received.split_inclusive('\n')
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>());
+
+        // assert that the number of entries retrieved is correct
+        assert_eq!(received_directory_contents.len(), 3);
 
         // collect individual files and directories into a hash set
         // before comparing since the order cannot be guaranteed
-        let received_directory_contents = string_received.split_inclusive('\n')
-            .map(|s| s.to_string())
+        let received_directory_contents = received_directory_contents
+            .into_iter()
             .collect::<HashSet<String>>();
 
         assert_eq!(expected_contents, received_directory_contents);
+
+        // assert that one more attempt to write sets success to 0
+        file_device.write(0xc, 0xcc, &mut mock_ram_interface);
+        file_device.write(0xd, 0xdd, &mut mock_ram_interface);
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_eq!(success, 0);
 
         // clean up
         fs::remove_dir_all(&tmp_dir_path).expect("failed to clean up test directory");
