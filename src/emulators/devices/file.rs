@@ -1,6 +1,57 @@
 use crate::emulators::uxn::device::{Device, MainRamInterface};
-use std::fs::File;
+use std::fs::{File, ReadDir};
 use std::io::Read;
+use std::io;
+use std::fs;
+use std::path::Path;
+use std::iter::Peekable;
+
+enum FsObject {
+    None,
+    File(File),
+    Directory(Peekable<DirEntryProducer>),
+}
+
+struct DirEntryProducer {
+    inner: ReadDir,
+}
+
+impl DirEntryProducer {
+    fn new(inner: ReadDir) -> Self {
+       DirEntryProducer { inner } 
+    }
+}
+ 
+impl Iterator for DirEntryProducer {
+    type Item = io::Result<Vec<u8>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // TODO produce entry for directory listing here
+        if let Some(entry) = self.inner.next() {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => return Some(Err(err)),
+            };
+
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(err) => return Some(Err(err)),
+            };
+
+            if metadata.is_dir() {
+                panic!("not yet implemented");
+            }
+
+            let len = metadata.len();
+            let len = u16::try_from(len).expect("not yet implemented");
+            let len = format!("{:04x}", len);
+
+            return Some(Ok(format!("{} {}\n", len, entry.file_name().into_string().expect("error, unsupported filename")).into_bytes()));
+        } else {
+            return None;
+        }
+    }
+}
 
 pub struct FileDevice {
     file_name_address: [u8; 2],
@@ -8,13 +59,28 @@ pub struct FileDevice {
     success: u16,
     fetch_length: [u8; 2],
     target_address: [u8; 2],
-    file_handle: Option<File>,
+    subject: FsObject,
+}
+
+fn open_fs_object(fs_name: &str) -> FsObject {
+    if Path::new(fs_name).is_dir() {
+        if let Ok(dir) = fs::read_dir(fs_name) {
+            return FsObject::Directory(DirEntryProducer::new(dir).peekable());
+        } else {
+            return FsObject::None;
+        }
+    }
+
+    if let Ok(file) = File::open(fs_name) {
+        return FsObject::File(file);
+    }
+    return FsObject::None;
 }
 
 impl FileDevice {
     pub fn new() -> Self {
         FileDevice{file_name_address: [0, 0], file_name: "".to_string(), success: 0,
-        fetch_length: [0, 0], target_address: [0, 0], file_handle: None}
+        fetch_length: [0, 0], target_address: [0, 0], subject: FsObject::None,}
     }
 
     fn refresh_file_name(&mut self, main_ram: &mut dyn MainRamInterface) {
@@ -35,26 +101,55 @@ impl FileDevice {
         let file_name = String::from_utf8(file_name).expect(
             "Non utf8 string encountered when reading file name");
 
-        self.file_handle = None;
+        self.subject = FsObject::None;
         self.file_name = file_name;
         self.success = 0;
     }
 
-    fn read_from_file(&mut self, main_ram: &mut dyn MainRamInterface) {
-        let mut file = if let Some(file) = &self.file_handle {
-            file
+    fn read_from_dir(&mut self, main_ram: &mut dyn MainRamInterface) {
+        let dir = if let FsObject::Directory(dir) = &mut self.subject {
+            dir
         } else {
-            if let Ok(file) = File::open(&self.file_name) {
-                self.file_handle = Some(file);
-                if let Some(file) = &self.file_handle {
-                    file
-                } else {
-                    panic!();
-                }
+            panic!("in read_from_dir, subject should be FsObject::Directory");
+        };
+
+        let bytes_to_write = u16::from_be_bytes(self.fetch_length);
+        let bytes_to_write = usize::from(bytes_to_write);
+
+        let mut buffer = Vec::<u8>::new();
+        loop {
+            let next_entry = dir.peek();
+            let next_entry = if let Some(next_entry) = next_entry {
+                next_entry
+            } else {
+                break;
+            };
+
+            let next_entry = if let Ok(next_entry) = next_entry {
+                next_entry
             } else {
                 self.success = 0;
                 return;
+            };
+
+            if buffer.len() + next_entry.len() > bytes_to_write {
+                break;
             }
+            let next_entry = dir.next().unwrap().unwrap();
+            buffer.extend(next_entry.into_iter());
+        }
+
+        main_ram.write(u16::from_be_bytes(self.target_address),
+            &mut buffer)
+            .expect("had problem reading from file and writing to memory");
+        self.success = u16::try_from(buffer.len()).unwrap();
+    }
+
+    fn read_from_file(&mut self, main_ram: &mut dyn MainRamInterface) {
+        let file = if let FsObject::File(file) = &mut self.subject {
+            file
+        } else {
+            panic!("in read_from_file, subject should be FsObject::File");
         };
 
         let mut buf = vec!(0; usize::from(u16::from_be_bytes(self.fetch_length)));
@@ -69,6 +164,28 @@ impl FileDevice {
             &mut buf[..num_bytes_read])
             .expect("had problem reading from file and writing to memory");
         self.success = u16::try_from(num_bytes_read).unwrap();
+    }
+
+    fn read_from_fs(&mut self, main_ram: &mut dyn MainRamInterface) {
+        match self.subject {
+            FsObject::None => {
+                self.subject = open_fs_object(&self.file_name);
+            },
+            _ => {}
+        }
+
+        match &mut self.subject {
+            FsObject::None => {
+                self.success = 0;
+                return;
+            },
+            FsObject::File(_) => {
+                self.read_from_file(main_ram);
+            },
+            FsObject::Directory(_) => {
+                self.read_from_dir(main_ram);
+            },
+        }
     }
 }
 
@@ -97,7 +214,7 @@ impl Device for FileDevice {
             },
             0xd => {
                 self.target_address[1] = val;
-                self.read_from_file(main_ram);
+                self.read_from_fs(main_ram);
             },
             _ => {}
         }
@@ -180,7 +297,7 @@ mod tests {
         let tmp_file_path = tmp_file_path.into_os_string().into_string()
              .expect("could not convert file path into string");
 
-        let mut read_values_to_return = tmp_file_path.bytes()
+        let read_values_to_return = tmp_file_path.bytes()
             .chain([0x0_u8,])
             .map(|b| Ok(vec!(b)))
             .collect::<VecDeque<_>>();
@@ -188,7 +305,7 @@ mod tests {
         mock_ram_interface.read_values_to_return = RefCell::new(
             read_values_to_return);
 
-        let mut write_values_to_return = VecDeque::from([
+        let write_values_to_return = VecDeque::from([
             Ok(contents.len() - 3),
             Ok(3),
             Ok(0),
@@ -286,7 +403,7 @@ mod tests {
         let tmp_file_path = tmp_file_path.into_os_string().into_string()
              .expect("could not convert file path into string");
 
-        let mut read_values_to_return = tmp_file_path.bytes()
+        let read_values_to_return = tmp_file_path.bytes()
             .chain([0x0_u8,])
             .map(|b| Ok(vec!(b)))
             .collect::<VecDeque<_>>();
@@ -338,5 +455,90 @@ mod tests {
         assert_eq!(
             mock_ram_interface.write_arguments_received.into_inner(),
             VecDeque::new());
+    }
+
+    // try and read a directory and assert that the correct format
+    // is produced and the correct paging behaviour can be observed
+    #[test]
+    fn test_dir_read() {
+        let mut mock_ram_interface = MockMainRamInterface::new();
+
+        let tmp_dir_name = format!("test_dir_{}", Uuid::new_v4());
+        let mut tmp_dir_path = std::env::temp_dir();
+        tmp_dir_path.push(tmp_dir_name);
+
+        fs::create_dir(&tmp_dir_path).expect("could not make test directory");
+
+        let mut test_file_path = tmp_dir_path.clone();
+        let test_file_name = format!("test_file_A_{}", Uuid::new_v4());
+        test_file_path.push(test_file_name.clone());
+
+        let contents = [0xff; 0x01ab];
+        fs::write(&test_file_path, &contents).expect("Failed to write test file");
+
+
+        let tmp_dir_path = tmp_dir_path.into_os_string().into_string()
+             .expect("could not convert directory path into string");
+        let read_values_to_return = tmp_dir_path.bytes()
+            .chain([0x0_u8,])
+            .map(|b| Ok(vec!(b)))
+            .collect::<VecDeque<_>>();
+
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            read_values_to_return);
+
+        let expected_contents = format!("01ab {}\n", test_file_name);
+
+        // TODO 
+        let write_values_to_return = VecDeque::from([
+            Ok(expected_contents.len()),
+            Ok(0),
+        ]);
+        mock_ram_interface.write_values_to_return = RefCell::new(
+            write_values_to_return);
+
+        let mut file_device = FileDevice::new();
+
+        // write to the file device, setting the address that the
+        // file name should be read from
+        file_device.write(0x8, 0xaa, &mut mock_ram_interface);
+        file_device.write(0x9, 0xbb, &mut mock_ram_interface);
+
+        let mut expected_start_address = 0xaabb;
+        let read_arguments_expected = tmp_dir_path.bytes()
+            .chain([0x0_u8,])
+            .map(|_b| {
+                expected_start_address += 1;
+                return (expected_start_address-1, 1);
+            })
+            .collect::<VecDeque<_>>();
+
+        // assert that the file device has queried the ram and
+        // read the file name from it
+        assert_eq!(
+            *mock_ram_interface.read_arguments_received.borrow(),
+            read_arguments_expected);
+
+        // write to the file device, setting the length to 
+        // be read
+        let chunk_length = u16::try_from(expected_contents.len() + 3).unwrap();
+        file_device.write(0xa, chunk_length.to_be_bytes()[0], &mut mock_ram_interface);
+        file_device.write(0xb, chunk_length.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // write to the file device, setting the address the read
+        // data should be written to
+        file_device.write(0xc, 0xcc, &mut mock_ram_interface);
+        file_device.write(0xd, 0xdd, &mut mock_ram_interface);
+
+        // assert that the contents of the file is written to the correct
+        // address
+        let write_arguments_expected = (0xccdd_u16, expected_contents.bytes()
+            .collect::<Vec<_>>());
+        assert_eq!(
+            mock_ram_interface.write_arguments_received.borrow_mut().pop_front().unwrap(),
+            write_arguments_expected);
+
+        // clean up
+        fs::remove_dir_all(&tmp_dir_path).expect("failed to clean up test directory");
     }
 }
