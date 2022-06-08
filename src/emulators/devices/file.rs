@@ -26,7 +26,6 @@ impl Iterator for DirEntryProducer {
     type Item = io::Result<Vec<u8>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO produce entry for directory listing here
         if let Some(entry) = self.inner.next() {
             let entry = match entry {
                 Ok(entry) => entry,
@@ -38,13 +37,13 @@ impl Iterator for DirEntryProducer {
                 Err(err) => return Some(Err(err)),
             };
 
-            if metadata.is_dir() {
-                panic!("not yet implemented");
-            }
-
-            let len = metadata.len();
-            let len = u16::try_from(len).expect("not yet implemented");
-            let len = format!("{:04x}", len);
+            let len = if metadata.is_dir() {
+                "----".to_string()
+            } else if let Ok(len) = u16::try_from(metadata.len()) {
+                format!("{:04x}", len)
+            } else {
+                "????".to_string()
+            };
 
             return Some(Ok(format!("{} {}\n", len, entry.file_name().into_string().expect("error, unsupported filename")).into_bytes()));
         } else {
@@ -247,6 +246,7 @@ mod tests {
     use crate::emulators::uxn::device::MainRamInterfaceError;
     use uuid::Uuid;
     use std::fs;
+    use std::collections::HashSet;
 
     struct MockMainRamInterface {
         read_arguments_received: RefCell<VecDeque<(u16, u16,)>>,
@@ -472,10 +472,19 @@ mod tests {
         let mut test_file_path = tmp_dir_path.clone();
         let test_file_name = format!("test_file_A_{}", Uuid::new_v4());
         test_file_path.push(test_file_name.clone());
-
         let contents = [0xff; 0x01ab];
         fs::write(&test_file_path, &contents).expect("Failed to write test file");
 
+        let mut test_inner_dir_path = tmp_dir_path.clone();
+        let test_inner_dir_name = format!("test_dir_AA_{}", Uuid::new_v4());
+        test_inner_dir_path.push(test_inner_dir_name.clone());
+        fs::create_dir(&test_inner_dir_path).expect("Failed to create test inner directory");
+
+        let mut large_test_file_path = tmp_dir_path.clone();
+        let large_test_file_name = format!("test_file_B_{}", Uuid::new_v4());
+        large_test_file_path.push(large_test_file_name.clone());
+        let contents = [0xff; 0x10000];
+        fs::write(&large_test_file_path, &contents).expect("Failed to write large test file");
 
         let tmp_dir_path = tmp_dir_path.into_os_string().into_string()
              .expect("could not convert directory path into string");
@@ -487,11 +496,18 @@ mod tests {
         mock_ram_interface.read_values_to_return = RefCell::new(
             read_values_to_return);
 
-        let expected_contents = format!("01ab {}\n", test_file_name);
+        let first_entry = format!("01ab {}\n", test_file_name);
+        let entry_len = first_entry.len();
+        let expected_contents = HashSet::from([
+            first_entry,
+            format!("---- {}\n", test_inner_dir_name),
+            format!("???? {}\n", large_test_file_name),
+        ]);
+        let total_len = entry_len * expected_contents.len();
 
-        // TODO 
+        // TODO add paging
         let write_values_to_return = VecDeque::from([
-            Ok(expected_contents.len()),
+            Ok(total_len),
             Ok(0),
         ]);
         mock_ram_interface.write_values_to_return = RefCell::new(
@@ -521,7 +537,7 @@ mod tests {
 
         // write to the file device, setting the length to 
         // be read
-        let chunk_length = u16::try_from(expected_contents.len() + 3).unwrap();
+        let chunk_length = u16::try_from(total_len + 3).unwrap();
         file_device.write(0xa, chunk_length.to_be_bytes()[0], &mut mock_ram_interface);
         file_device.write(0xb, chunk_length.to_be_bytes()[1], &mut mock_ram_interface);
 
@@ -532,11 +548,20 @@ mod tests {
 
         // assert that the contents of the file is written to the correct
         // address
-        let write_arguments_expected = (0xccdd_u16, expected_contents.bytes()
-            .collect::<Vec<_>>());
-        assert_eq!(
-            mock_ram_interface.write_arguments_received.borrow_mut().pop_front().unwrap(),
-            write_arguments_expected);
+        let write_address_expected = 0xccdd_u16;
+        let write_arguments_received = mock_ram_interface.write_arguments_received.borrow_mut().pop_front().unwrap();
+
+        assert_eq!(write_arguments_received.0, write_address_expected);
+
+        let string_received = String::from_utf8(write_arguments_received.1).unwrap();
+
+        // collect individual files and directories into a hash set
+        // before comparing since the order cannot be guaranteed
+        let received_directory_contents = string_received.split_inclusive('\n')
+            .map(|s| s.to_string())
+            .collect::<HashSet<String>>();
+
+        assert_eq!(expected_contents, received_directory_contents);
 
         // clean up
         fs::remove_dir_all(&tmp_dir_path).expect("failed to clean up test directory");
