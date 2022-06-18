@@ -196,6 +196,15 @@ impl FileDevice {
         self.success = u16::try_from(output.len()).unwrap();
     }
 
+    fn delete_from_fs(&mut self) {
+        let res = fs::remove_file(&self.file_name);
+        if let Ok(_) = res {
+            self.success = 1;
+        } else {
+            self.success = 0;
+        }
+    }
+
     fn read_from_fs(&mut self, main_ram: &mut dyn MainRamInterface) {
         match self.subject {
             FsObject::None => {
@@ -232,6 +241,9 @@ impl Device for FileDevice {
             0x5 => {
                 self.stat_target_address[1] = val;
                 self.stat_from_fs(main_ram);
+            },
+            0x6 => {
+                self.delete_from_fs();
             },
             0x8 => {
                 self.file_name_address[0] = val;
@@ -284,6 +296,7 @@ mod tests {
     use crate::emulators::uxn::device::MainRamInterfaceError;
     use uuid::Uuid;
     use std::fs;
+    use std::io;
     use std::collections::HashSet;
 
     struct MockMainRamInterface {
@@ -920,5 +933,61 @@ mod tests {
         ]);
         assert_eq!(success, 0_u16);
         fs::remove_file(test_file_path).expect("Failed to clean up test file");
+    }
+
+    // test using the delete file functionality of the file device, verifying that it deletes the
+    // file and that it sets the success flag correctly
+    #[test]
+    fn test_delete() {
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mut file_device = FileDevice::new();
+
+        // make a test file (of length 0x0001)
+        let mut test_file_path = std::env::temp_dir();
+        let test_file_name = format!("test_file_{}", Uuid::new_v4());
+        test_file_path.push(test_file_name.clone());
+        fs::write(&test_file_path, &[0xff; 0x0001]).expect("Failed to write test file");
+        let test_file_path = test_file_path.into_os_string().into_string()
+             .expect("could not convert file path into string");
+
+        let read_values_to_return = test_file_path.bytes()
+            .chain([0x0_u8,])
+            .map(|b| Ok(vec!(b)))
+            .collect::<VecDeque<_>>();
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            read_values_to_return);
+
+        // write to the file device, setting the address that the
+        // file name should be read from
+        file_device.write(0x8, 0xcc, &mut mock_ram_interface);
+        file_device.write(0x9, 0xcd, &mut mock_ram_interface);
+
+        let mut expected_start_address = 0xcccd;
+        let read_arguments_expected = test_file_path.bytes()
+            .chain([0x0_u8,])
+            .map(|_b| {
+                expected_start_address += 1;
+                return (expected_start_address-1, 1);
+            })
+            .collect::<VecDeque<_>>();
+        // assert that the file device has queried the ram and
+        // read the file name from it
+        assert_eq!(
+            *mock_ram_interface.read_arguments_received.borrow(),
+            read_arguments_expected);
+
+        // write to the delete port, and assert that success is not set 
+        // to 0
+        file_device.write(0x6, 0x01, &mut mock_ram_interface);
+
+        let success = u16::from_be_bytes([
+            file_device.read(0x2),
+            file_device.read(0x3),
+        ]);
+        assert_ne!(success, 0_u16);
+
+        // assert that the test file no longer exists
+        let res = fs::metadata(&test_file_path);
+        assert_eq!(res.unwrap_err().kind(), io::ErrorKind::NotFound); 
     }
 }
