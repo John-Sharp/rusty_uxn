@@ -1,6 +1,6 @@
 use crate::emulators::uxn::device::{Device, MainRamInterface};
 use std::fs::{File, ReadDir};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::io;
 use std::fs;
 use std::path::Path;
@@ -63,7 +63,9 @@ pub struct FileDevice {
     fetch_length: [u8; 2],
     target_address: [u8; 2],
     stat_target_address: [u8; 2],
+    write_target_address: [u8; 2],
     subject: FsObject,
+    append: u8,
 }
 
 fn open_fs_object(fs_name: &str) -> FsObject {
@@ -85,7 +87,7 @@ impl FileDevice {
     pub fn new() -> Self {
         FileDevice{file_name_address: [0, 0], file_name: "".to_string(), success: 0,
         fetch_length: [0, 0], target_address: [0, 0], stat_target_address: [0, 0],
-        subject: FsObject::None,}
+        write_target_address: [0, 0], subject: FsObject::None, append: 0,}
     }
 
     fn refresh_file_name(&mut self, main_ram: &mut dyn MainRamInterface) {
@@ -226,6 +228,39 @@ impl FileDevice {
             },
         }
     }
+
+    fn write_to_fs(&mut self, main_ram: &mut dyn MainRamInterface) {
+        let mut f = File::options();
+        f.write(true);
+        if self.append == 0x1 {
+            f.append(true);
+        } else {
+            f.truncate(true);
+        }
+
+        f.create(true);
+        let mut f = f.open(&self.file_name);
+
+        let mut f = if let Ok(f) = f {
+            f
+        } else {
+            self.success = 0;
+            return;
+        };
+
+        let data_to_write = main_ram.read(
+            u16::from_be_bytes(self.write_target_address),
+            u16::from_be_bytes(self.fetch_length));
+
+        let data_to_write = if let Ok(d) = data_to_write {
+            d
+        } else {
+            self.success = 0;
+            return;
+        };
+
+        f.write(&data_to_write);
+    }
 }
 
 impl Device for FileDevice {
@@ -245,6 +280,9 @@ impl Device for FileDevice {
             0x6 => {
                 self.delete_from_fs();
             },
+            0x7 => {
+                self.append = val;
+            }
             0x8 => {
                 self.file_name_address[0] = val;
             },
@@ -264,6 +302,13 @@ impl Device for FileDevice {
             0xd => {
                 self.target_address[1] = val;
                 self.read_from_fs(main_ram);
+            },
+            0xe => {
+                self.write_target_address[0] = val;
+            },
+            0xf => {
+                self.write_target_address[1] = val;
+                self.write_to_fs(main_ram);
             },
             _ => {}
         }
@@ -989,5 +1034,126 @@ mod tests {
         // assert that the test file no longer exists
         let res = fs::metadata(&test_file_path);
         assert_eq!(res.unwrap_err().kind(), io::ErrorKind::NotFound); 
+    }
+
+    // test the write functionality of the file device, writing a file, overwriting it,
+    // and then appending it. Check that each of these stages works as expected
+    #[test]
+    fn test_write() {
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mut file_device = FileDevice::new();
+
+        let mut test_file_path = std::env::temp_dir();
+        let test_file_name = format!("test_file_{}", Uuid::new_v4());
+        test_file_path.push(test_file_name);
+        let test_file_path = test_file_path.into_os_string().into_string()
+             .expect("could not convert file path into string");
+
+        let read_values_to_return = test_file_path.bytes()
+            .chain([0x0_u8,])
+            .map(|b| Ok(vec!(b)))
+            .collect::<VecDeque<_>>();
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            read_values_to_return);
+
+        // write to the file device, setting the address that the
+        // file name should be read from
+        file_device.write(0x8, 0xcc, &mut mock_ram_interface);
+        file_device.write(0x9, 0xcd, &mut mock_ram_interface);
+
+        let mut expected_start_address = 0xcccd;
+        let read_arguments_expected = test_file_path.bytes()
+            .chain([0x0_u8,])
+            .map(|_b| {
+                expected_start_address += 1;
+                return (expected_start_address-1, 1);
+            })
+            .collect::<VecDeque<_>>();
+        // assert that the file device has queried the ram and
+        // read the file name from it
+        assert_eq!(
+            *mock_ram_interface.read_arguments_received.borrow(),
+            read_arguments_expected);
+
+        let test_file_contents = "first test file contents".to_string();
+
+        // set length of memory area that the file contents should be read from
+        let len = test_file_contents.len();
+        let len = u16::try_from(len).unwrap();
+        file_device.write(0xa, len.to_be_bytes()[0], &mut mock_ram_interface);
+        file_device.write(0xb, len.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // prepare the ram interface to provide the contents of the file that is to
+        // be written
+        mock_ram_interface.read_values_to_return.get_mut().push_front(
+            Ok(test_file_contents.clone().bytes().collect::<Vec<_>>()));
+
+        // write to the addr(write) port
+        file_device.write(0xe, 0x12, &mut mock_ram_interface);
+        file_device.write(0xf, 0x34, &mut mock_ram_interface);
+
+        // assert that the mock ram interface had its read method called with
+        // the expected address and number of bytes to read
+        assert_eq!(
+            mock_ram_interface.read_arguments_received.get_mut().pop_back().unwrap(),
+            (0x1234, len));
+
+        // verify that the file actually exists and contains what is expected
+        let contents = String::from_utf8(fs::read(&test_file_path).unwrap()).unwrap();
+        assert_eq!(contents, test_file_contents);
+
+        let test_file_contents = "second contents".to_string();
+
+        // set length of memory area that the file contents should be read from
+        let len = test_file_contents.len();
+        let len = u16::try_from(len).unwrap();
+        file_device.write(0xa, len.to_be_bytes()[0], &mut mock_ram_interface);
+        file_device.write(0xb, len.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // prepare the ram interface to provide the contents of the file that is to
+        // be written
+        mock_ram_interface.read_values_to_return.get_mut().push_front(
+            Ok(test_file_contents.clone().bytes().collect::<Vec<_>>()));
+
+        // write to the addr(write) port
+        file_device.write(0xe, 0x12, &mut mock_ram_interface);
+        file_device.write(0xf, 0x34, &mut mock_ram_interface);
+
+        // assert that the mock ram interface had its read method called with
+        // the expected address and number of bytes to read
+        assert_eq!(
+            mock_ram_interface.read_arguments_received.get_mut().pop_back().unwrap(),
+            (0x1234, len));
+
+        // verify that the file actually exists and contains what is expected
+        // (and the original file contents have been deleted)
+        let contents = String::from_utf8(fs::read(&test_file_path).unwrap()).unwrap();
+        assert_eq!(contents, test_file_contents);
+
+        let appended_contents = " with something appended".to_string();
+        // set length of memory area that the file contents should be read from
+        let len = appended_contents.len();
+        let len = u16::try_from(len).unwrap();
+        file_device.write(0xa, len.to_be_bytes()[0], &mut mock_ram_interface);
+        file_device.write(0xb, len.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // prepare the ram interface to provide the contents of the file that is to
+        // be written
+        mock_ram_interface.read_values_to_return.get_mut().push_front(
+            Ok(appended_contents.clone().bytes().collect::<Vec<_>>()));
+
+        // set the 'append' byte
+        file_device.write(0x7, 0x1, &mut mock_ram_interface);
+
+        // write to the addr(write) port
+        file_device.write(0xe, 0x12, &mut mock_ram_interface);
+        file_device.write(0xf, 0x34, &mut mock_ram_interface);
+
+        // verify that the file actually exists and contains what is expected
+        // (the original file contents with the new section appended)
+        let contents = String::from_utf8(fs::read(&test_file_path).unwrap()).unwrap();
+        assert_eq!(contents, "second contents with something appended");
+
+        fs::remove_file(test_file_path).expect("Failed to clean up test file");
     }
 }
