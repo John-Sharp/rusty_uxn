@@ -1,0 +1,32 @@
+%HALT { #010f DEO }
+
+( devices )
+|10 @Console [ &vector $2 &read $1 &pad $5 &write $1 &error $1 ]
+|c0 @Datetime   [ &year   $2 &month    $1 &day    $1 &hour  $1 &minute $1 &second $1 &dotw $1 &doty $2 &isdst $1 ]
+
+|100
+( read day )
+.Datetime/day DEI
+
+( print day out )
+( leading digit )
+DUP #0a DIV DUP #30 ADD .Console/write DEO
+( units digit )
+#0a MUL SUB #30 ADD .Console/write DEO
+
+LIT '/ .Console/write DEO
+
+( read month )
+.Datetime/month DEI #01 ADD
+( print month out )
+( leading digit )
+DUP #0a DIV DUP #30 ADD .Console/write DEO
+( units digit )
+#0a MUL SUB #30 ADD .Console/write DEO
+
+LIT '/ .Console/write DEO
+
+( read year )
+.Datetime/month DEI2
+
+LIT 01 LIT 0e DEO

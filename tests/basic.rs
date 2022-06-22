@@ -148,3 +148,10 @@ fn console_test() {
     assert_eq!(String::from_utf8(stdout_output).unwrap(), "Hello, first second");
     assert_eq!(String::from_utf8(stderr_output).unwrap(), "Error test");
 }
+
+// test datetime device, printing out datetime and ensuring it is correct
+#[test]
+fn datetime_test() {
+
+
+}
