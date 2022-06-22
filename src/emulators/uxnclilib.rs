@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use crate::uxninterface::UxnStatus;
 use crate::ops::OpObjectFactory;
 use crate::emulators::devices::console::Console;
+use crate::emulators::devices::file::FileDevice;
+use crate::emulators::devices::datetime::DateTimeDevice;
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
@@ -67,11 +69,17 @@ pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_con
         other_config.stdout_writer,
         other_config.stderr_writer);
 
+    let mut file_device = FileDevice::new();
+
+    let mut datetime_device = DateTimeDevice::new();
+
     // initial run of program
     {
         let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
         device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
+        device_list.insert(0xa, DeviceEntry::Device(&mut file_device));
+        device_list.insert(0xc, DeviceEntry::Device(&mut datetime_device));
         let device_list = DeviceListImpl::new(device_list);
 
         let res = uxn.run(uxn::INIT_VECTOR, device_list)?;
@@ -90,6 +98,8 @@ pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_con
         let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
         device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
         device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
+        device_list.insert(0xa, DeviceEntry::Device(&mut file_device));
+        device_list.insert(0xc, DeviceEntry::Device(&mut datetime_device));
         let device_list = DeviceListImpl::new(device_list);
 
         let res = uxn.run(console_vector, device_list)?;
@@ -110,6 +120,8 @@ pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_con
                 let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
                 device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
                 device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
+                device_list.insert(0xa, DeviceEntry::Device(&mut file_device));
+                device_list.insert(0xc, DeviceEntry::Device(&mut datetime_device));
                 let device_list = DeviceListImpl::new(device_list);
 
                 let res = uxn.run(console_vector, device_list)?;

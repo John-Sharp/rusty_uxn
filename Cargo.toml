@@ -13,6 +13,7 @@ uuid = { version = "1.0.0", features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]}
+chrono = "0.4"
 
 [features]
 emu = []
