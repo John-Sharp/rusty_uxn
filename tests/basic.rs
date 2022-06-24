@@ -2,6 +2,7 @@ use uuid::Uuid;
 use std::fs;
 use rusty_uxn::emulators::uxnclilib;
 use std::io::Cursor;
+use chrono::{Local, Datelike};
 
 // push some values onto the working and return stacks, verify
 // from the system device debug output that the stacks look as
@@ -153,5 +154,118 @@ fn console_test() {
 #[test]
 fn datetime_test() {
 
+// This program is the compiled result of the following:
+//
+// %RTN { JMP2r }
+// %HALT { #010f DEO }
+// %EMIT { .Console/write DEO }
+// 
+// ( devices )
+// |10 @Console [ &vector $2 &read $1 &pad $5 &write $1 &error $1 ]
+// |c0 @Datetime   [ &year   $2 &month    $1 &day    $1 &hour  $1 &minute $1 &second $1 &dotw $1 &doty $2 &isdst $1 ]
+// 
+// |100
+// ( read day )
+// .Datetime/day DEI
+// ;byte-to-console JSR2
+// 
+// LIT '/ EMIT
+// 
+// ( read month )
+// .Datetime/month DEI #01 ADD
+// ;byte-to-console JSR2
+// 
+// LIT '/ .Console/write DEO
+// 
+// ( read year )
+// .Datetime/year DEI2
+// ;short-to-console JSR2
+// 
+// HALT
+// BRK
+// 
+// @byte-to-console ( byte -- )
+// 
+//   #0a SWP DUP 
+// 
+//   &start-loop
+//   #0a DIV #00 EQU ,&exit-loop JCN 
+// 
+//     DUP DUP #0a DIV #0a MUL SUB
+//     SWP #0a DIV DUP
+//     ,&start-loop JMP
+//   &exit-loop
+// 
+//   &start-loop2
+//   DUP #0a EQU ,&exit-loop2 JCN 
+//     #30 ADD EMIT
+//     ,&start-loop2 JMP
+//   &exit-loop2
+//   POP
+// 
+// RTN
+//
+// 
+// @short-to-console ( short -- )
+// 
+//   #000a SWP2 DUP2 
+// 
+//   &start-loop
+//   #000a DIV2 #0000 EQU2 ,&exit-loop JCN 
+// 
+//     DUP2 DUP2 #000a DIV2 #000a MUL2 SUB2
+//     SWP2 #000a DIV2 DUP2
+//     ,&start-loop JMP
+//   &exit-loop
+// 
+//   &start-loop2
+//   DUP2 #000a EQU2 ,&exit-loop2 JCN 
+//     #30 ADD EMIT POP
+//     ,&start-loop2 JMP
+//   &exit-loop2
+//   POP2
+// 
+// RTN
+// 
+// It should print today's date to console as d/m/yyyy
+    let prog = vec![
+        0x80, 0xc3, 0x16, 0xa0, 0x01, 0x27, 0x2e, 0x80, 0x2f,
+        0x80, 0x18, 0x17, 0x80, 0xc2, 0x16, 0x80, 0x01, 0x18,
+        0xa0, 0x01, 0x27, 0x2e, 0x80, 0x2f, 0x80, 0x18, 0x17,
+        0x80, 0xc0, 0x36, 0xa0, 0x01, 0x57, 0x2e, 0xa0, 0x01,
+        0x0f, 0x17, 0x00, 0x80, 0x0a, 0x04, 0x06, 0x80, 0x0a,
+        0x1b, 0x80, 0x00, 0x08, 0x80, 0x11, 0x0d, 0x06, 0x06,
+        0x80, 0x0a, 0x1b, 0x80, 0x0a, 0x1a, 0x19, 0x04, 0x80,
+        0x0a, 0x1b, 0x06, 0x80, 0xe6, 0x0c, 0x06, 0x80, 0x0a,
+        0x08, 0x80, 0x09, 0x0d, 0x80, 0x30, 0x18, 0x80, 0x18,
+        0x17, 0x80, 0xf0, 0x0c, 0x02, 0x6c, 0xa0, 0x00, 0x0a,
+        0x24, 0x26, 0xa0, 0x00, 0x0a, 0x3b, 0xa0, 0x00, 0x00,
+        0x28, 0x80, 0x14, 0x0d, 0x26, 0x26, 0xa0, 0x00, 0x0a,
+        0x3b, 0xa0, 0x00, 0x0a, 0x3a, 0x39, 0x24, 0xa0, 0x00,
+        0x0a, 0x3b, 0x26, 0x80, 0xe1, 0x0c, 0x26, 0xa0, 0x00,
+        0x0a, 0x28, 0x80, 0x0a, 0x0d, 0x80, 0x30, 0x18, 0x80,
+        0x18, 0x17, 0x02, 0x80, 0xee, 0x0c, 0x22, 0x6c,];
 
+    let tmp_file_name = format!("datetime_test{}", Uuid::new_v4());
+    let mut tmp_file_path = std::env::temp_dir();
+    tmp_file_path.push(tmp_file_name);
+
+    fs::write(&tmp_file_path, &prog).expect("Failed to write test program");
+
+    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: "".to_string()};
+    let mut stdout_output = Vec::new();
+    let stdin_input = Cursor::new("");
+    let mut stderr_output = Vec::new();
+    let mut debug_output = Vec::new();
+    let config = uxnclilib::Config{
+        stdout_writer: &mut stdout_output,
+        stdin_reader: stdin_input,
+        stderr_writer: &mut stderr_output,
+        debug_writer: &mut debug_output};
+
+    uxnclilib::run(cli_options, config).expect("Failed to execute test program");
+    let today = Local::today();
+    let expected = format!("{}/{}/{}", today.day(), today.month(), today.year());
+    
+    assert_eq!(String::from_utf8(stdout_output).unwrap(), expected);
 }
