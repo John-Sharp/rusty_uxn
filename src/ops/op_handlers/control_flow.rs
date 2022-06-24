@@ -78,7 +78,10 @@ pub fn jsr_handler(
 
     if short == true {
         let dst = wrapper.pop_short()?;
-        let [b2, b1] = dst.to_be_bytes();
+
+        let pc = wrapper.uxn.get_program_counter()?;
+        let [b2, b1] = pc.to_be_bytes();
+
         wrapper.push_to_return_stack(b2)?;
         wrapper.push_to_return_stack(b1)?;
 
@@ -289,6 +292,7 @@ mod tests {
           Ok(()), Ok(())]));
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([
           Ok(()), Ok(()),]));
+        mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([Ok(0x0102),]));
 
         jsr_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
 
@@ -307,7 +311,7 @@ mod tests {
              (0xbb,), (0xaa,),])
         );
 
-        // new program counter value should also be pushed to the 'return' stack,
+        // old program counter value should also be pushed to the 'return' stack,
         // but since we're in return mode the 'return' stack is actually the working
         // stack
         assert_eq!(
@@ -315,7 +319,7 @@ mod tests {
                 .push_to_working_stack_arguments_received
                 .into_inner(),
             VecDeque::from([
-             (0xbb,), (0xaa,),])
+             (0x01,), (0x02,),])
         );
     }
 
