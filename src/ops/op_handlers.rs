@@ -111,11 +111,11 @@ mod stack;
 pub use stack::lit_handler;
 pub use stack::inc_handler;
 pub use stack::pop_handler;
-pub use stack::dup_handler;
 pub use stack::nip_handler;
 pub use stack::swp_handler;
-pub use stack::ovr_handler;
 pub use stack::rot_handler;
+pub use stack::dup_handler;
+pub use stack::ovr_handler;
 
 mod logic;
 pub use logic::equ_handler;
