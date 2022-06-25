@@ -50,6 +50,23 @@ impl fmt::Display for RomReadError {
 
 impl Error for RomReadError {}
 
+struct CliDevices<J: Write, K: Write, M: Write> {
+    console_device: Console<J, K>,
+    file_device: FileDevice,
+    datetime_device: DateTimeDevice,
+    debug_writer: M,
+}
+
+fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut CliDevices<J, K, M>) -> DeviceListImpl<'_, &mut M> {
+    let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
+    device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut devices.debug_writer));
+    device_list.insert(0x1, DeviceEntry::Device(&mut devices.console_device));
+    device_list.insert(0xa, DeviceEntry::Device(&mut devices.file_device));
+    device_list.insert(0xc, DeviceEntry::Device(&mut devices.datetime_device));
+    let device_list = DeviceListImpl::new(device_list);
+    return device_list;
+}
+
 pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_config: Config<J, K, L, M>) -> Result<(), Box<dyn Error>> {
     let rom = match File::open(cli_config.rom.as_path()) {
         Ok(fp) => fp,
@@ -73,36 +90,23 @@ pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_con
 
     let mut datetime_device = DateTimeDevice::new();
 
+    let mut cli_devices = CliDevices{
+        console_device, file_device, datetime_device, debug_writer: other_config.debug_writer};
+
     // initial run of program
-    {
-        let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
-        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
-        device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
-        device_list.insert(0xa, DeviceEntry::Device(&mut file_device));
-        device_list.insert(0xc, DeviceEntry::Device(&mut datetime_device));
-        let device_list = DeviceListImpl::new(device_list);
+    let res = uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut cli_devices))?;
 
-        let res = uxn.run(uxn::INIT_VECTOR, device_list)?;
-
-        match res {
-            UxnStatus::Terminate => { return Ok(()); },
-            UxnStatus::Halt => {},
-        }
+    match res {
+        UxnStatus::Terminate => { return Ok(()); },
+        UxnStatus::Halt => {},
     }
 
     // for the input given on the command line, make each byte of it, in turn, available through
     // the console device and trigger the console input vector
     for c in cli_config.input.bytes() {
-        console_device.provide_input(c);
-        let console_vector = console_device.read_vector();
-        let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
-        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
-        device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
-        device_list.insert(0xa, DeviceEntry::Device(&mut file_device));
-        device_list.insert(0xc, DeviceEntry::Device(&mut datetime_device));
-        let device_list = DeviceListImpl::new(device_list);
-
-        let res = uxn.run(console_vector, device_list)?;
+        cli_devices.console_device.provide_input(c);
+        let console_vector = cli_devices.console_device.read_vector();
+        let res = uxn.run(console_vector, construct_device_list(&mut cli_devices))?;
 
         match res {
             UxnStatus::Terminate => { return Ok(()); },
@@ -115,16 +119,9 @@ pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_con
     for c in other_config.stdin_reader.bytes() {
         match c {
             Ok(c) => {
-                console_device.provide_input(c);
-                let console_vector = console_device.read_vector();
-                let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
-                device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut other_config.debug_writer));
-                device_list.insert(0x1, DeviceEntry::Device(&mut console_device));
-                device_list.insert(0xa, DeviceEntry::Device(&mut file_device));
-                device_list.insert(0xc, DeviceEntry::Device(&mut datetime_device));
-                let device_list = DeviceListImpl::new(device_list);
-
-                let res = uxn.run(console_vector, device_list)?;
+                cli_devices.console_device.provide_input(c);
+                let console_vector = cli_devices.console_device.read_vector();
+                let res = uxn.run(console_vector, construct_device_list(&mut cli_devices))?;
 
                 match res {
                     UxnStatus::Terminate => { return Ok(()); },
