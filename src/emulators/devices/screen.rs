@@ -1,7 +1,12 @@
 use crate::emulators::uxn::device::{Device, MainRamInterface};
+use std::collections::HashMap;
 
-#[derive(Clone, PartialEq)]
-enum UxnColorIndex {
+pub trait UxnSystemScreenInterface {
+    fn get_system_colors(&self, colors: &mut [u8; 6]) -> bool;
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum UxnColorIndex {
     Zero,
     One,
     Two,
@@ -50,6 +55,8 @@ pub struct ScreenDevice {
     changed: bool,
     vector: [u8; 2],
     target_location: [[u8; 2]; 2],
+    system_colors_raw: [u8; 6],
+    system_colors: HashMap<UxnColorIndex, [u8; 3]>,
 }
 
 const FG: usize = 0;
@@ -64,6 +71,13 @@ impl ScreenDevice {
             changed: true,
             vector: [0; 2],
             target_location: [[0; 2], [0; 2]],
+            system_colors_raw: [0; 6],
+            system_colors: HashMap::from([
+                (UxnColorIndex::Zero, [0,0,0]),
+                (UxnColorIndex::One, [0,0,0]),
+                (UxnColorIndex::Two, [0,0,0]),
+                (UxnColorIndex::Three, [0,0,0]),
+            ]),
         }
     }
 
@@ -83,7 +97,46 @@ impl ScreenDevice {
         }
     }
 
-    fn draw_if_changed(&mut self, draw_fn: &dyn Fn(&[u16; 2], &[u8])) {
+    fn update_system_colors(&mut self) {
+        *self.system_colors.get_mut(&UxnColorIndex::Zero).unwrap() = [
+            (self.system_colors_raw[0] >> 4) & 0xf,
+            (self.system_colors_raw[2] >> 4) & 0xf,
+            (self.system_colors_raw[4] >> 4) & 0xf,
+        ];
+
+        *self.system_colors.get_mut(&UxnColorIndex::One).unwrap() = [
+            (self.system_colors_raw[0]) & 0xf,
+            (self.system_colors_raw[2]) & 0xf,
+            (self.system_colors_raw[4]) & 0xf,
+        ];
+
+        *self.system_colors.get_mut(&UxnColorIndex::Two).unwrap() = [
+            (self.system_colors_raw[1] >> 4) & 0xf,
+            (self.system_colors_raw[3] >> 4) & 0xf,
+            (self.system_colors_raw[5] >> 4) & 0xf,
+        ];
+
+        *self.system_colors.get_mut(&UxnColorIndex::Three).unwrap() = [
+            (self.system_colors_raw[1]) & 0xf,
+            (self.system_colors_raw[3]) & 0xf,
+            (self.system_colors_raw[5]) & 0xf,
+        ];
+
+        for (_, val) in self.system_colors.iter_mut() {
+            for component in val.iter_mut() {
+                *component |= (*component)<<4;
+            }
+        }
+    }
+
+    fn draw_if_changed(&mut self,
+                       system: &dyn UxnSystemScreenInterface,
+                       draw_fn: &dyn Fn(&[u16; 2], &[u8])) {
+        if system.get_system_colors(&mut self.system_colors_raw) {
+            self.changed = true;
+            self.update_system_colors();
+        }
+
         if self.changed {
             let mut fg_pixels = self.layers[FG].pixels.iter().flatten();
             let mut bg_pixels = self.layers[BG].pixels.iter().flatten();
@@ -94,17 +147,11 @@ impl ScreenDevice {
             for (fg_pixel, bg_pixel) in fg_pixels.zip(bg_pixels) {
                 let color = match fg_pixel {
                     UxnColorIndex::Zero => {
-                        match bg_pixel {
-                            UxnColorIndex::Zero => [0xab, 0x0, 0x0],
-                            UxnColorIndex::One => [0xbb, 0x0, 0x0],
-                            UxnColorIndex::Two => [0xcb, 0x0, 0x0],
-                            UxnColorIndex::Three => [0xdb, 0x0, 0x0],
-                        }
+                        bg_pixel
                     },
-                    UxnColorIndex::One => [0xba, 0x0, 0x0],
-                    UxnColorIndex::Two => [0xca, 0x0, 0x0],
-                    UxnColorIndex::Three => [0xda, 0x0, 0x0],
+                    _ => fg_pixel,
                 };
+                let color = &self.system_colors[color];
 
                 let screen_pixel_r = pixel_iter.next().unwrap();
                 let screen_pixel_g = pixel_iter.next().unwrap();
@@ -115,10 +162,6 @@ impl ScreenDevice {
                 *screen_pixel_b = color[2];
                 i+=1;
             }
-
-            println!("i {}, len {} dim ({}, {})", i, self.pixels.len(),
-            self.layers[FG].pixels.len(), self.layers[FG].pixels[0].len());
-
 
             let dim = [
                 u16::from_be_bytes([self.dim[0][0], self.dim[0][1]]),
@@ -192,7 +235,6 @@ impl Device for ScreenDevice {
 mod tests {
     use super::*;
     use crate::emulators::uxn::device::MainRamInterfaceError;
-    use std::iter;
 
     struct MockMainRamInterface {}
     impl MainRamInterface for MockMainRamInterface {
@@ -202,6 +244,15 @@ mod tests {
 
         fn write(&mut self, _address: u16, _bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
             panic!("should not be called");
+        }
+    }
+
+    struct MockUxnSystemScreenInterface<F: Fn(&mut [u8; 6]) -> bool> {
+        get_system_colors_inner: F,
+    }
+    impl<F: Fn(&mut [u8; 6]) -> bool> UxnSystemScreenInterface for MockUxnSystemScreenInterface<F> {
+        fn get_system_colors(&self, colors: &mut [u8; 6]) -> bool {
+            (self.get_system_colors_inner)(colors)
         }
     }
 
@@ -217,6 +268,17 @@ mod tests {
     fn test_pixel_write() {
         let mut screen = ScreenDevice::new(&[0x1f, 0x2f]);
         let mut mock_ram_interface = MockMainRamInterface{};
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            get_system_colors_inner: |colors| {
+                let system_colors = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab];
+                if colors == &system_colors {
+                    return false;
+                }
+
+                *colors = system_colors;
+                return true;
+            }
+        };
 
         // set location to (0x18, 0x2d)
         let target_x = u16::to_be_bytes(0x18);
@@ -230,8 +292,8 @@ mod tests {
         let color = 0x02; 
         screen.write(0xe,color, &mut mock_ram_interface);
 
-        let mut expected_pixels = vec![[0xab_u8, 0_u8, 0_u8]; 0x1f*0x2f];
-        expected_pixels[0x1f*0x2d + 0x18] = [0xcb, 0, 0];
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x1f*0x2f];
+        expected_pixels[0x1f*0x2d + 0x18] = [0x22, 0x66, 0xaa];
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
 
@@ -239,7 +301,7 @@ mod tests {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[0x1f, 0x2f], dim);
         };
-        screen.draw_if_changed(&draw_fn);
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
 
         // TODO try drawing again and assert draw_fn not called
         // TODO make another change and assert draw_fn called
