@@ -32,6 +32,15 @@ impl Layer {
             pixels: vec![vec![UxnColorIndex::Zero; usize::from(dimensions[0])]; usize::from(dimensions[1])],
         }
     }
+
+    fn set_pixel(&mut self, coordinate: &[u16; 2], color: UxnColorIndex) -> bool {
+        if self.pixels[usize::from(coordinate[1])][usize::from(coordinate[0])] != color {
+            self.pixels[usize::from(coordinate[1])][usize::from(coordinate[0])] = color;
+            return true;
+        }
+
+        return false;
+    }
 }
 
 pub struct ScreenDevice {
@@ -66,15 +75,57 @@ impl ScreenDevice {
 
         let target_x = u16::from_be_bytes(
             [self.target_location[0][0], self.target_location[0][1]]);
-        let target_x = usize::from(target_x);
         let target_y = u16::from_be_bytes(
             [self.target_location[1][0], self.target_location[1][1]]);
-        let target_y = usize::from(target_y);
 
-        let target_pixel = &mut self.layers[layer].pixels[target_y][target_x];
-        if *target_pixel != color_index {
-            *target_pixel = color_index; 
+        if self.layers[layer].set_pixel(&[target_x, target_y], color_index) {
             self.changed = true;
+        }
+    }
+
+    fn draw_if_changed(&mut self, draw_fn: &dyn Fn(&[u16; 2], &[u8])) {
+        if self.changed {
+            let mut fg_pixels = self.layers[FG].pixels.iter().flatten();
+            let mut bg_pixels = self.layers[BG].pixels.iter().flatten();
+
+            let mut i = 0;
+
+            let mut pixel_iter = self.pixels.iter_mut();
+            for (fg_pixel, bg_pixel) in fg_pixels.zip(bg_pixels) {
+                let color = match fg_pixel {
+                    UxnColorIndex::Zero => {
+                        match bg_pixel {
+                            UxnColorIndex::Zero => [0xab, 0x0, 0x0],
+                            UxnColorIndex::One => [0xbb, 0x0, 0x0],
+                            UxnColorIndex::Two => [0xcb, 0x0, 0x0],
+                            UxnColorIndex::Three => [0xdb, 0x0, 0x0],
+                        }
+                    },
+                    UxnColorIndex::One => [0xba, 0x0, 0x0],
+                    UxnColorIndex::Two => [0xca, 0x0, 0x0],
+                    UxnColorIndex::Three => [0xda, 0x0, 0x0],
+                };
+
+                let screen_pixel_r = pixel_iter.next().unwrap();
+                let screen_pixel_g = pixel_iter.next().unwrap();
+                let screen_pixel_b = pixel_iter.next().unwrap();
+
+                *screen_pixel_r = color[0];
+                *screen_pixel_g = color[1];
+                *screen_pixel_b = color[2];
+                i+=1;
+            }
+
+            println!("i {}, len {} dim ({}, {})", i, self.pixels.len(),
+            self.layers[FG].pixels.len(), self.layers[FG].pixels[0].len());
+
+
+            let dim = [
+                u16::from_be_bytes([self.dim[0][0], self.dim[0][1]]),
+                u16::from_be_bytes([self.dim[1][0], self.dim[1][1]]),
+            ];
+
+            draw_fn(&dim, &self.pixels);
         }
     }
 }
@@ -140,6 +191,19 @@ impl Device for ScreenDevice {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::emulators::uxn::device::MainRamInterfaceError;
+    use std::iter;
+
+    struct MockMainRamInterface {}
+    impl MainRamInterface for MockMainRamInterface {
+        fn read(&self, _address: u16, _num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+            panic!("should not be called");
+        }
+
+        fn write(&mut self, _address: u16, _bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
+            panic!("should not be called");
+        }
+    }
 
     #[test]
     fn test_create() {
@@ -149,4 +213,35 @@ mod tests {
     }
 
     // TODO write test for writing pixel
+    #[test]
+    fn test_pixel_write() {
+        let mut screen = ScreenDevice::new(&[0x1f, 0x2f]);
+        let mut mock_ram_interface = MockMainRamInterface{};
+
+        // set location to (0x18, 0x2d)
+        let target_x = u16::to_be_bytes(0x18);
+        screen.write(0x8, target_x[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x[1], &mut mock_ram_interface);
+        let target_y = u16::to_be_bytes(0x2d);
+        screen.write(0xa, target_y[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y[1], &mut mock_ram_interface);
+
+        // set the background to colour index 2 and paint the pixel
+        let color = 0x02; 
+        screen.write(0xe,color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0xab_u8, 0_u8, 0_u8]; 0x1f*0x2f];
+        expected_pixels[0x1f*0x2d + 0x18] = [0xcb, 0, 0];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x1f, 0x2f], dim);
+        };
+        screen.draw_if_changed(&draw_fn);
+
+        // TODO try drawing again and assert draw_fn not called
+        // TODO make another change and assert draw_fn called
+    }
 }
