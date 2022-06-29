@@ -5,7 +5,7 @@ pub trait UxnSystemScreenInterface {
     fn get_system_colors(&self, colors: &mut [u8; 6]) -> bool;
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UxnColorIndex {
     Zero,
     One,
@@ -233,6 +233,7 @@ impl Device for ScreenDevice {
 mod tests {
     use super::*;
     use crate::emulators::uxn::device::MainRamInterfaceError;
+    use std::cell::RefCell;
 
     struct MockMainRamInterface {}
     impl MainRamInterface for MockMainRamInterface {
@@ -348,6 +349,50 @@ mod tests {
     }
 
     // test that changing system colors counts as a change in draw_if_changed
+    #[test]
+    fn test_system_color_change() {
+        let mut screen = ScreenDevice::new(&[16, 9]);
+        let mut mock_ram_interface = MockMainRamInterface{};
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (2, 3)
+        screen.write(0x9, 2, &mut mock_ram_interface);
+        screen.write(0xb, 3, &mut mock_ram_interface);
+
+        // set the background to colour index 3 and paint the pixel
+        let color = 0x03; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        // on first draw, assert we get what is expected
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // change the system colors
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54]};
+
+        let mut expected_pixels = vec![[0xff_u8, 0xbb_u8, 0x77_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0xcc, 0x88, 0x44];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+        let called = RefCell::new(false);
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+            *called.borrow_mut() = true;
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(*called.borrow(), true);
+    }
 
     // test that foreground pixels are drawn over background if foreground pixel is anything other
     // than index 0
