@@ -141,8 +141,6 @@ impl ScreenDevice {
             let mut fg_pixels = self.layers[FG].pixels.iter().flatten();
             let mut bg_pixels = self.layers[BG].pixels.iter().flatten();
 
-            let mut i = 0;
-
             let mut pixel_iter = self.pixels.iter_mut();
             for (fg_pixel, bg_pixel) in fg_pixels.zip(bg_pixels) {
                 let color = match fg_pixel {
@@ -160,7 +158,6 @@ impl ScreenDevice {
                 *screen_pixel_r = color[0];
                 *screen_pixel_g = color[1];
                 *screen_pixel_b = color[2];
-                i+=1;
             }
 
             let dim = [
@@ -169,6 +166,7 @@ impl ScreenDevice {
             ];
 
             draw_fn(&dim, &self.pixels);
+            self.changed = false;
         }
     }
 }
@@ -261,16 +259,11 @@ mod tests {
         }
     }
 
+    // on a screen large enough to need two shorts to describe its dimensions, draw a
+    // pixel and assert that when the draw function is called the correct bitmap
+    // is provided to be drawn
     #[test]
-    fn test_create() {
-        let screen = ScreenDevice::new(&[64*8, 40*8]);
-
-        assert_eq!(screen.pixels.len(), 64*8*40*8*3);
-    }
-
-    // TODO write test for writing pixel
-    #[test]
-    fn test_pixel_write() {
+    fn test_pixel_draw() {
         let mut screen = ScreenDevice::new(&[0x1f, 0x2f]);
         let mut mock_ram_interface = MockMainRamInterface{};
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
@@ -286,7 +279,7 @@ mod tests {
 
         // set the background to colour index 2 and paint the pixel
         let color = 0x02; 
-        screen.write(0xe,color, &mut mock_ram_interface);
+        screen.write(0xe, color, &mut mock_ram_interface);
 
         let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x1f*0x2f];
         expected_pixels[0x1f*0x2d + 0x18] = [0x22, 0x66, 0xaa];
@@ -298,8 +291,64 @@ mod tests {
             assert_eq!(&[0x1f, 0x2f], dim);
         };
         screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
-
-        // TODO try drawing again and assert draw_fn not called
-        // TODO make another change and assert draw_fn called
     }
+
+    // drawing a pixel to screen, assert that calling draw_if_changed only calls the inner draw
+    // function if something has changed
+    #[test]
+    fn test_pixel_write_repeated() {
+        let mut screen = ScreenDevice::new(&[16, 9]);
+        let mut mock_ram_interface = MockMainRamInterface{};
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (2, 3)
+        screen.write(0x9, 2, &mut mock_ram_interface);
+        screen.write(0xb, 3, &mut mock_ram_interface);
+
+        // set the background to colour index 3 and paint the pixel
+        let color = 0x03; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        // on first draw, assert we get what is expected
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // calling draw_if_changed with no change should not call draw_fn
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            panic!("was not expecting draw_fn to be called after repeat");
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // set location to (0, 0) and draw a pixel colour index 1 (on foreground)
+        screen.write(0x9, 0, &mut mock_ram_interface);
+        screen.write(0xb, 0, &mut mock_ram_interface);
+        let color = 0x41; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        // now that something has changed, draw_fn should be called with new bitmap
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        expected_pixels[16*0 + 0] = [0x11, 0x55, 0x99];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+    }
+
+    // test that changing system colors counts as a change in draw_if_changed
+
+    // test that foreground pixels are drawn over background if foreground pixel is anything other
+    // than index 0
 }
