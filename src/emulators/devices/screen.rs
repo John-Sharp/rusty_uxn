@@ -247,12 +247,17 @@ mod tests {
         }
     }
 
-    struct MockUxnSystemScreenInterface<F: Fn(&mut [u8; 6]) -> bool> {
-        get_system_colors_inner: F,
+    struct MockUxnSystemScreenInterface {
+        system_colors_raw: [u8; 6],
     }
-    impl<F: Fn(&mut [u8; 6]) -> bool> UxnSystemScreenInterface for MockUxnSystemScreenInterface<F> {
+    impl UxnSystemScreenInterface for MockUxnSystemScreenInterface {
         fn get_system_colors(&self, colors: &mut [u8; 6]) -> bool {
-            (self.get_system_colors_inner)(colors)
+            if colors == &self.system_colors_raw {
+                return false;
+            }
+
+            *colors = self.system_colors_raw;
+            return true;
         }
     }
 
@@ -269,16 +274,7 @@ mod tests {
         let mut screen = ScreenDevice::new(&[0x1f, 0x2f]);
         let mut mock_ram_interface = MockMainRamInterface{};
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
-            get_system_colors_inner: |colors| {
-                let system_colors = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab];
-                if colors == &system_colors {
-                    return false;
-                }
-
-                *colors = system_colors;
-                return true;
-            }
-        };
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
 
         // set location to (0x18, 0x2d)
         let target_x = u16::to_be_bytes(0x18);
