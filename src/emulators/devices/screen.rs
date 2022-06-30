@@ -396,4 +396,64 @@ mod tests {
 
     // test that foreground pixels are drawn over background if foreground pixel is anything other
     // than index 0
+    #[test]
+    fn test_foreground_background() {
+        let mut screen = ScreenDevice::new(&[16, 9]);
+        let mut mock_ram_interface = MockMainRamInterface{};
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (2, 3)
+        screen.write(0x9, 2, &mut mock_ram_interface);
+        screen.write(0xb, 3, &mut mock_ram_interface);
+
+        // set the background to colour index 3 and paint the pixel
+        let color = 0x03; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        // on first draw, assert we get what is expected
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // set the foreground to color index 1 and paint the pixel
+        let color = 0x41; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x11, 0x55, 0x99];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        // assert that now foreground is drawn over the background
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // set foreground to color index 0 so that background should show
+        // through again
+        let color = 0x40; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+    }
+
 }
