@@ -52,11 +52,17 @@ pub struct ScreenDevice {
     layers: [Layer; 2],
     pixels: Vec<u8>,
     dim: [[u8; 2]; 2],
+    auto_byte: u8,
     changed: bool,
     vector: [u8; 2],
     target_location: [[u8; 2]; 2],
+    last_pixel_value: u8,
     system_colors_raw: [u8; 6],
     system_colors: HashMap<UxnColorIndex, [u8; 3]>,
+    sprite_repeat: u8,
+    auto_inc_address: bool,
+    auto_inc_x: bool,
+    auto_inc_y: bool,
 }
 
 const FG: usize = 0;
@@ -68,9 +74,11 @@ impl ScreenDevice {
             layers: [Layer::new(dimensions), Layer::new(dimensions)],
             pixels: vec![0; usize::from(dimensions[0]) * usize::from(dimensions[1]) * 3],
             dim: [dimensions[0].to_be_bytes(), dimensions[1].to_be_bytes()],
+            auto_byte: 0,
             changed: true,
             vector: [0; 2],
             target_location: [[0; 2], [0; 2]],
+            last_pixel_value: 0,
             system_colors_raw: [0; 6],
             system_colors: HashMap::from([
                 (UxnColorIndex::Zero, [0,0,0]),
@@ -78,6 +86,10 @@ impl ScreenDevice {
                 (UxnColorIndex::Two, [0,0,0]),
                 (UxnColorIndex::Three, [0,0,0]),
             ]),
+            sprite_repeat: 0,
+            auto_inc_address: false,
+            auto_inc_x: false,
+            auto_inc_y: false,
         }
     }
 
@@ -94,6 +106,13 @@ impl ScreenDevice {
 
         if self.layers[layer].set_pixel(&[target_x, target_y], color_index) {
             self.changed = true;
+        }
+
+        if self.auto_inc_x {
+            [self.target_location[0][0], self.target_location[0][1]] = (target_x + 1).to_be_bytes();
+        }
+        if self.auto_inc_y {
+            [self.target_location[1][0], self.target_location[1][1]] = (target_y + 1).to_be_bytes();
         }
     }
 
@@ -180,6 +199,13 @@ impl ScreenDevice {
         self.pixels = vec![0; usize::from(dimensions[0]) * usize::from(dimensions[1]) * 3];
         self.changed = true;
     }
+
+    fn set_auto(&mut self, val: u8) {
+        self.sprite_repeat = val >> 4;
+        self.auto_inc_address = if (val & 0x04) == 1 { true } else { false };
+        self.auto_inc_x = if (val & 0x01) != 0 { true } else { false };
+        self.auto_inc_y = if (val & 0x02) != 0 { true } else { false };
+    }
 }
 
 impl Device for ScreenDevice {
@@ -210,7 +236,8 @@ impl Device for ScreenDevice {
                 self.resize();
             },
             0x6 => {
-                // TODO save as auto value
+                self.auto_byte = val;
+                self.set_auto(val);
             },
             0x8 => {
                 self.target_location[0][0] = val;
@@ -225,6 +252,7 @@ impl Device for ScreenDevice {
                 self.target_location[1][1] = val;
             },
             0xe => {
+                self.last_pixel_value = val;
                 self.pixel_write(val);
             },
             _ => {}
@@ -233,6 +261,18 @@ impl Device for ScreenDevice {
 
     fn read(&mut self, port: u8) -> u8 {
         match port {
+            0x0 => return self.vector[0],
+            0x1 => return self.vector[1],
+            0x2 => return self.dim[0][0],
+            0x3 => return self.dim[0][1],
+            0x4 => return self.dim[1][0],
+            0x5 => return self.dim[1][1],
+            0x6 => return self.auto_byte,
+            0x8 => return self.target_location[0][0],
+            0x9 => return self.target_location[0][1],
+            0xa => return self.target_location[1][0],
+            0xb => return self.target_location[1][1],
+            0xe => return self.last_pixel_value,
             _ => {},
         }
 
@@ -532,5 +572,89 @@ mod tests {
         };
         screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
         assert_eq!(*called.borrow(), true);
+    }
+
+    // test the auto flag for incrementing x and y coordinates when pixel painting
+    #[test]
+    fn test_auto_inc_pixel() {
+        let mut screen = ScreenDevice::new(&[16, 9]);
+        let mut mock_ram_interface = MockMainRamInterface{};
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (2, 3)
+        screen.write(0x9, 2, &mut mock_ram_interface);
+        screen.write(0xb, 3, &mut mock_ram_interface);
+
+        // set the auto byte to increment x
+        screen.write(0x6, 0x1, &mut mock_ram_interface);
+
+        // set the background to colour index 3 and paint the pixel
+        let color = 0x03; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        // x coordinate should be incremented by 1
+        let new_x = u16::from_be_bytes([screen.read(0x8), screen.read(0x9)]);
+        let new_y = u16::from_be_bytes([screen.read(0xa), screen.read(0xb)]);
+        assert_eq!([new_x, new_y], [3, 3]);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        // on first draw, assert we get what is expected
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // set the foreground to colour index 1 and paint the pixel
+        let color = 0x11; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        // pixel that is painted should have x coordinate incremented by 1
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        expected_pixels[16*3 + 3] = [0x11, 0x55, 0x99];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // set the auto byte to increment x and y simulataneously
+        screen.write(0x6, 0x3, &mut mock_ram_interface);
+        // set the foreground to colour index 1 and paint the pixel (location will be 4,3)
+        let color = 0x11; 
+
+        let new_x = u16::from_be_bytes([screen.read(0x8), screen.read(0x9)]);
+        let new_y = u16::from_be_bytes([screen.read(0xa), screen.read(0xb)]);
+        assert_eq!([new_x, new_y], [4, 3]);
+
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        // x and y coordinate should be both incremented by 1
+        let new_x = u16::from_be_bytes([screen.read(0x8), screen.read(0x9)]);
+        let new_y = u16::from_be_bytes([screen.read(0xa), screen.read(0xb)]);
+        assert_eq!([new_x, new_y], [5, 4]);
+
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        expected_pixels[16*3 + 3] = [0x11, 0x55, 0x99];
+        expected_pixels[16*3 + 4] = [0x11, 0x55, 0x99];
+        expected_pixels[16*4 + 5] = [0x11, 0x55, 0x99];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
     }
 }
