@@ -169,6 +169,17 @@ impl ScreenDevice {
             self.changed = false;
         }
     }
+
+    fn resize(&mut self) {
+        let dimensions = [
+            u16::from_be_bytes([self.dim[0][0], self.dim[0][1]]),
+            u16::from_be_bytes([self.dim[1][0], self.dim[1][1]]),
+        ];
+
+        self.layers = [Layer::new(&dimensions), Layer::new(&dimensions)];
+        self.pixels = vec![0; usize::from(dimensions[0]) * usize::from(dimensions[1]) * 3];
+        self.changed = true;
+    }
 }
 
 impl Device for ScreenDevice {
@@ -189,14 +200,14 @@ impl Device for ScreenDevice {
             },
             0x3 => {
                 self.dim[0][1] = val;
-                // TODO resize screen
+                self.resize();
             },
             0x4 => {
                 self.dim[1][0] = val;
             },
             0x5 => {
                 self.dim[1][1] = val;
-                // TODO resize screen
+                self.resize();
             },
             0x6 => {
                 // TODO save as auto value
@@ -456,4 +467,70 @@ mod tests {
         screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
     }
 
+    // test that after a screen dimension change, the screen is cleared
+    #[test]
+    fn test_dimension_change() {
+        let mut screen = ScreenDevice::new(&[16, 9]);
+        let mut mock_ram_interface = MockMainRamInterface{};
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (2, 3)
+        screen.write(0x9, 2, &mut mock_ram_interface);
+        screen.write(0xb, 3, &mut mock_ram_interface);
+
+        // set the background to colour index 3 and paint the pixel
+        let color = 0x03; 
+        screen.write(0xe, color, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 16*9];
+        expected_pixels[16*3 + 2] = [0x33, 0x77, 0xbb];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        // on first draw, assert we get what is expected
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[16, 9], dim);
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        // change the width dimension
+        let new_width = 12_u16;
+        let new_width_bytes = new_width.to_be_bytes();
+        screen.write(0x2, new_width_bytes[0], &mut mock_ram_interface);
+        screen.write(0x3, new_width_bytes[1], &mut mock_ram_interface);
+
+        // screen should now be of new dimension, and blank
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 12*9];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+        let called = RefCell::new(false);
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[12, 9], dim);
+            *called.borrow_mut() = true;
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(*called.borrow(), true);
+
+        // change the height dimension
+        let new_height = 4_u16;
+        let new_height_bytes = new_height.to_be_bytes();
+        screen.write(0x4, new_height_bytes[0], &mut mock_ram_interface);
+        screen.write(0x5, new_height_bytes[1], &mut mock_ram_interface);
+
+        // screen should now be of new dimension, and blank
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 12*4];
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+        let called = RefCell::new(false);
+        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[12, 4], dim);
+            *called.borrow_mut() = true;
+        };
+        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(*called.borrow(), true);
+    }
 }
