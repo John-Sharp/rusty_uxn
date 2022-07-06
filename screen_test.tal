@@ -1,0 +1,51 @@
+( macros ) 
+%HALT { #010f DEO }
+
+( devices )
+
+|00 @System     [ &vector $2 &wst      $1 &rst    $1 &pad   $4 &r      $2 &g      $2 &b    $2 &debug  $1 &halt $1 ]
+|20 @Screen     [ &vector $2 &width    $2 &height $2 &pad   $2 &x      $2 &y      $2 &addr $2 &pixel  $1 &sprite $1 ]
+
+|0100 ( -> )
+
+( set system colors )
+#f000 #00f0 #0f00 .System/b DEO2 .System/g DEO2 .System/r DEO2
+
+#0001 #0001 .Screen/y DEO2 .Screen/x DEO2
+#01 .Screen/pixel DEO
+#0002 #0001 .Screen/y DEO2 .Screen/x DEO2
+#01 .Screen/pixel DEO
+#0003 #0001 .Screen/y DEO2 .Screen/x DEO2
+#01 .Screen/pixel DEO
+#0004 #0001 .Screen/y DEO2 .Screen/x DEO2
+#01 .Screen/pixel DEO
+#0005 #0001 .Screen/y DEO2 .Screen/x DEO2
+#01 .Screen/pixel DEO
+
+#01 .System/debug DEO
+
+
+( HALT BRK )
+
+
+( assets )
+
+@bg-img
+&x 0000 &y 0000 &w 0010 &h 0010
+&data
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
