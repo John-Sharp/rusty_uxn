@@ -4,26 +4,52 @@
 ( devices )
 
 |00 @System     [ &vector $2 &wst      $1 &rst    $1 &pad   $4 &r      $2 &g      $2 &b    $2 &debug  $1 &halt $1 ]
-|20 @Screen     [ &vector $2 &width    $2 &height $2 &pad   $2 &x      $2 &y      $2 &addr $2 &pixel  $1 &sprite $1 ]
+|10 @Console    [ &vector $2 &read     $1 &pad    $5 &write $1 &error  $1 ]
+|20 @Screen     [ &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel  $1 &sprite $1 ]
+
+( variables )
+|0000
+@img
+&x $2 &y $2 &w $2 &h $2 &data
 
 |0100 ( -> )
 
 ( set system colors )
 #f000 #00f0 #0f00 .System/b DEO2 .System/g DEO2 .System/r DEO2
 
-#0001 #0001 .Screen/y DEO2 .Screen/x DEO2
-#01 .Screen/pixel DEO
-#0002 #0001 .Screen/y DEO2 .Screen/x DEO2
-#01 .Screen/pixel DEO
-#0003 #0001 .Screen/y DEO2 .Screen/x DEO2
-#01 .Screen/pixel DEO
-#0004 #0001 .Screen/y DEO2 .Screen/x DEO2
-#01 .Screen/pixel DEO
-#0005 #0001 .Screen/y DEO2 .Screen/x DEO2
-#01 .Screen/pixel DEO
+;fg-img ;draw-img JSR2
 
-#01 .System/debug DEO
+;bg-img ;draw-img JSR2
 
+BRK
+
+
+@draw-img ( img-addr -- )
+ .img/x DUP2 LDA2 STZ2
+ #0002 ADD2 DUP2 LDA2 .img/y STZ2
+ #0002 ADD2 DUP2 LDA2 .img/w STZ2
+ #0002 ADD2 DUP2 LDA2 .img/h STZ2
+ #0002 ADD2 .img/data STZ2
+ 
+ .img/y LDZ2
+ &loop-y
+   DUP2 .Screen/y DEO2
+ 
+   .img/x LDZ2
+   DUP2 .Screen/x DEO2
+   #01 .Screen/auto DEO
+   &loop-x
+         SWP2k .img/w LDZ2 MUL2 ADD2 .img/data LDZ2 ADD2 LDA
+ 	.Screen/pixel DEO
+   #0001 ADD2 DUP2
+   .img/w LDZ2 .img/x LDZ2 ADD2 SWP2 GTH2 ,&loop-x JCN
+ POP2
+ 
+ #0001 ADD2 DUP2
+ .img/h LDZ2 .img/y LDZ2 ADD2 SWP2 GTH2 ,&loop-y JCN
+ POP2
+ 
+ JMP2r
 
 ( HALT BRK )
 
@@ -38,6 +64,8 @@
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 02 02 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 02 02 01 01 01 01 01 01 01 01
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
@@ -46,6 +74,10 @@
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
-01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
-01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
-01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+01 01 01 01 01 01 01 01 01 01 01 01 01 01 02 02
+
+@fg-img
+&x 0000 &y 0000 &w 0002 &h 0002
+&data
+42 40
+40 42
