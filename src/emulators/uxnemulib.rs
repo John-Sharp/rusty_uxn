@@ -14,9 +14,10 @@ use speedy2d::window::{WindowHandler, WindowHelper, WindowStartupInfo, WindowCre
 use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 use speedy2d::dimen::Vector2;
+use speedy2d::image::{ImageDataType, ImageSmoothingMode};
 
 use crate::ops::OpObjectFactory;
-use crate::emulators::devices::console::Console;
+use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice};
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
@@ -49,14 +50,30 @@ impl fmt::Display for RomReadError {
 
 impl Error for RomReadError {}
 
+struct EmuDevices<J: Write, K: Write, M: Write> {
+    console_device: Console<J, K>,
+    file_device: FileDevice,
+    datetime_device: DateTimeDevice,
+    debug_writer: M,
+}
+
+fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut EmuDevices<J, K, M>) -> DeviceListImpl<'_, &mut M> {
+    let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
+    device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut devices.debug_writer));
+    device_list.insert(0x1, DeviceEntry::Device(&mut devices.console_device));
+    device_list.insert(0xa, DeviceEntry::Device(&mut devices.file_device));
+    device_list.insert(0xc, DeviceEntry::Device(&mut devices.datetime_device));
+    let device_list = DeviceListImpl::new(device_list);
+    return device_list;
+}
+
 enum UxnEvent {
     ScreenRefresh,
 }
 
 struct MyWindowHandler<J: instruction::InstructionFactory, K: Write, L: Write, M: Write> {
     uxn: uxn::UxnImpl<J>,
-    console_device: Console<L, M>,
-    debug_writer: K,
+    devices: EmuDevices<K, L, M>,
 }
 
 impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHandler<UxnEvent> for MyWindowHandler<J, K, L, M>
@@ -64,20 +81,28 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
     fn on_draw(&mut self, _helper: &mut WindowHelper<UxnEvent>, graphics: &mut Graphics2D)
     {
         // Draw things here using `graphics`
-        graphics.clear_screen(Color::from_rgb(0.8, 0.9, 1.0));
-        graphics.draw_circle((100.0, 100.0), 75.0, Color::BLUE);
-        println!("redrawing");
-//        helper.request_redraw();
+        graphics.clear_screen(Color::from_rgb(0.0, 0.0, 0.0));
+
+        let mut draw_fn = |size: &[u16; 2], pixels: &[u8]| {
+            let size = Vector2::new(size[0] as u32, size[1] as u32);
+            
+            let image_handle = graphics.create_image_from_raw_pixels(
+                ImageDataType::RGB,
+                ImageSmoothingMode::NearestNeighbor,
+                size,
+                pixels
+                ).unwrap();
+            graphics.draw_image((10.0, 10.0), &image_handle);
+        };
+
+        draw_fn(&[2,2],
+                &[0x00, 0x00, 0xff, 0x00, 0x00, 0xff,
+                0xff, 0xff, 0xff, 0x00, 0x00, 0xff,]
+               );
     }
 
     fn on_start(&mut self, _helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
-        // TODO run uxn from init vector
-        let mut device_list: HashMap::<u8, DeviceEntry<&mut K>> = HashMap::new();
-        device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut self.debug_writer));
-        device_list.insert(0x1, DeviceEntry::Device(&mut self.console_device));
-        let device_list = DeviceListImpl::new(device_list);
-
-        self.uxn.run(uxn::INIT_VECTOR, device_list);
+        self.uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut self.devices));
         // start thread that sleeps for 1/60 second and then triggers an event to trigger
         // the screen draw vector
     }
@@ -89,7 +114,7 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
     ) {
         match user_event {
             UxnEvent::ScreenRefresh => {
-                println!("should be refreshing screen here");
+                helper.request_redraw();
             },
         }
     }
@@ -112,6 +137,12 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
 
     let console_device = Console::new(io::stdout(), io::stderr());
 
+    let mut file_device = FileDevice::new();
+
+    let mut datetime_device = DateTimeDevice::new();
+
+    let mut emu_devices = EmuDevices{
+        console_device, file_device, datetime_device, debug_writer: io::stderr()};
 
     let window = Window::<UxnEvent>::new_with_user_events("Title", WindowCreationOptions::new_windowed(WindowSize::PhysicalPixels(Vector2::new(512, 320)), None)).unwrap();
 
@@ -124,6 +155,6 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     });
 
     window.run_loop(MyWindowHandler{
-        uxn, console_device, debug_writer: other_config.stderr_writer,
+        uxn, devices: emu_devices
     });
 }
