@@ -69,7 +69,7 @@ const FG: usize = 0;
 const BG: usize = 1;
 
 impl ScreenDevice {
-    fn new(dimensions: &[u16; 2]) -> Self {
+    pub fn new(dimensions: &[u16; 2]) -> Self {
         ScreenDevice {
             layers: [Layer::new(dimensions), Layer::new(dimensions)],
             pixels: vec![0; usize::from(dimensions[0]) * usize::from(dimensions[1]) * 3],

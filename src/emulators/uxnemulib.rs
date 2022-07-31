@@ -17,13 +17,16 @@ use speedy2d::dimen::Vector2;
 use speedy2d::image::{ImageDataType, ImageSmoothingMode};
 
 use crate::ops::OpObjectFactory;
-use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice};
+use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice, screen::ScreenDevice};
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
 
 use crate::instruction;
 use crate::emulators::uxn;
+
+
+const INITIAL_DIMENSIONS: [u16; 2] = [64*8, 40*8];
 
 /// A rust implementation of the uxn virtual machine
 #[derive(Parser)]
@@ -55,12 +58,14 @@ struct EmuDevices<J: Write, K: Write, M: Write> {
     file_device: FileDevice,
     datetime_device: DateTimeDevice,
     debug_writer: M,
+    screen_device: ScreenDevice,
 }
 
 fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut EmuDevices<J, K, M>) -> DeviceListImpl<'_, &mut M> {
     let mut device_list: HashMap::<u8, DeviceEntry<&mut M>> = HashMap::new();
     device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut devices.debug_writer));
     device_list.insert(0x1, DeviceEntry::Device(&mut devices.console_device));
+    device_list.insert(0x2, DeviceEntry::Device(&mut devices.screen_device));
     device_list.insert(0xa, DeviceEntry::Device(&mut devices.file_device));
     device_list.insert(0xc, DeviceEntry::Device(&mut devices.datetime_device));
     let device_list = DeviceListImpl::new(device_list);
@@ -141,8 +146,10 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
 
     let mut datetime_device = DateTimeDevice::new();
 
+    let screen_device = ScreenDevice::new(&INITIAL_DIMENSIONS);
+
     let mut emu_devices = EmuDevices{
-        console_device, file_device, datetime_device, debug_writer: io::stderr()};
+        console_device, file_device, datetime_device, debug_writer: io::stderr(), screen_device};
 
     let window = Window::<UxnEvent>::new_with_user_events("Title", WindowCreationOptions::new_windowed(WindowSize::PhysicalPixels(Vector2::new(512, 320)), None)).unwrap();
 
