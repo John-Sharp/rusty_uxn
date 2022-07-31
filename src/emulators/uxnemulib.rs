@@ -86,8 +86,6 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
     fn on_draw(&mut self, _helper: &mut WindowHelper<UxnEvent>, graphics: &mut Graphics2D)
     {
         // Draw things here using `graphics`
-        graphics.clear_screen(Color::from_rgb(0.0, 0.0, 0.0));
-
         let mut draw_fn = |size: &[u16; 2], pixels: &[u8]| {
             let size = Vector2::new(size[0] as u32, size[1] as u32);
             
@@ -97,13 +95,13 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
                 size,
                 pixels
                 ).unwrap();
-            graphics.draw_image((10.0, 10.0), &image_handle);
+            graphics.clear_screen(Color::from_rgb(0.0, 0.0, 0.0));
+            graphics.draw_image((0.0, 0.0), &image_handle);
         };
 
-        draw_fn(&[2,2],
-                &[0x00, 0x00, 0xff, 0x00, 0x00, 0xff,
-                0xff, 0xff, 0xff, 0x00, 0x00, 0xff,]
-               );
+        self.devices.screen_device.draw_if_changed(
+            &self.uxn,
+            &mut draw_fn);
     }
 
     fn on_start(&mut self, _helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
@@ -119,7 +117,9 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
     ) {
         match user_event {
             UxnEvent::ScreenRefresh => {
-                helper.request_redraw();
+                if self.devices.screen_device.get_draw_required(&self.uxn) {
+                    helper.request_redraw();
+                }
             },
         }
     }

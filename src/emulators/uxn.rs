@@ -6,6 +6,7 @@ pub mod device;
 use device::{DeviceList, DeviceWriteReturnCode, DeviceReadReturnCode, MainRamInterface, MainRamInterfaceError};
 use crate::emulators::devices;
 use crate::emulators::devices::system::{UxnSystemInterface, UxnSystemColor};
+use crate::emulators::devices::screen::UxnSystemScreenInterface;
 use crate::uxninterface::{Uxn, UxnError, UxnStatus, UxnWithDevices};
 
 struct UxnWithDevicesImpl<'a, J, K>
@@ -298,6 +299,20 @@ J: InstructionFactory,
 
     fn get_return_stack_iter(&self) -> std::slice::Iter<u8> {
         self.return_stack.iter()
+    }
+}
+
+impl<J> UxnSystemScreenInterface for UxnImpl<J>
+where
+J: InstructionFactory,
+{
+    fn get_system_colors(&self, colors: &mut [u8; 6]) -> bool {
+        if colors == &self.system_colors {
+            return false;
+        }
+
+        *colors = self.system_colors;
+        return true;
     }
 }
 

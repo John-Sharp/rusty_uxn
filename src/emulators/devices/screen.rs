@@ -148,9 +148,20 @@ impl ScreenDevice {
         }
     }
 
-    fn draw_if_changed(&mut self,
+    pub fn get_draw_required(&mut self,
+        system: &dyn UxnSystemScreenInterface) -> bool {
+        if system.get_system_colors(&mut self.system_colors_raw) {
+            self.changed = true;
+            self.update_system_colors();
+        }
+
+        return self.changed;
+    }
+
+    // TODO change into simpler 'draw' function
+    pub fn draw_if_changed(&mut self,
                        system: &dyn UxnSystemScreenInterface,
-                       draw_fn: &dyn Fn(&[u16; 2], &[u8])) {
+                       draw_fn: &mut dyn FnMut(&[u16; 2], &[u8])) {
         if system.get_system_colors(&mut self.system_colors_raw) {
             self.changed = true;
             self.update_system_colors();
