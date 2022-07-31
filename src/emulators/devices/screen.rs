@@ -162,12 +162,12 @@ impl ScreenDevice {
     pub fn draw_if_changed(&mut self,
                        system: &dyn UxnSystemScreenInterface,
                        draw_fn: &mut dyn FnMut(&[u16; 2], &[u8])) {
-        if system.get_system_colors(&mut self.system_colors_raw) {
-            self.changed = true;
-            self.update_system_colors();
-        }
+        // if system.get_system_colors(&mut self.system_colors_raw) {
+        //     self.changed = true;
+        //     self.update_system_colors();
+        // }
 
-        if self.changed {
+        // if self.changed {
             let mut fg_pixels = self.layers[FG].pixels.iter().flatten();
             let mut bg_pixels = self.layers[BG].pixels.iter().flatten();
 
@@ -197,7 +197,7 @@ impl ScreenDevice {
 
             draw_fn(&dim, &self.pixels);
             self.changed = false;
-        }
+        // }
     }
 
     fn resize(&mut self) {

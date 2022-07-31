@@ -106,8 +106,6 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
 
     fn on_start(&mut self, _helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
         self.uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut self.devices));
-        // start thread that sleeps for 1/60 second and then triggers an event to trigger
-        // the screen draw vector
     }
 
     fn on_user_event(
@@ -151,7 +149,12 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     let mut emu_devices = EmuDevices{
         console_device, file_device, datetime_device, debug_writer: io::stderr(), screen_device};
 
-    let window = Window::<UxnEvent>::new_with_user_events("Title", WindowCreationOptions::new_windowed(WindowSize::PhysicalPixels(Vector2::new(512, 320)), None)).unwrap();
+    let window_creation_options = WindowCreationOptions::new_windowed(WindowSize::PhysicalPixels(Vector2::new(INITIAL_DIMENSIONS[0].into(), INITIAL_DIMENSIONS[1].into())), None);
+    let window_creation_options = window_creation_options.with_resizable(false);
+
+    let window = Window::<UxnEvent>::new_with_user_events(
+        "Title",
+        window_creation_options).unwrap();
 
     let window_refresh_event_sender = window.create_user_event_sender();
     thread::spawn(move || {
