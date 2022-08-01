@@ -148,6 +148,11 @@ impl ScreenDevice {
         }
     }
 
+    // test whether the screen has changed since the last time `draw()` was called
+    // and, therefore, if a call to `draw()` is necessary to render the screen. As a side effect,
+    // this function looks up what the system colours are and, if they have changed, caches them.
+    // Intended use for this function is to be called periodically and only to schedule a full
+    // redraw (whereupon `draw()` is called) when this function returns true
     pub fn get_draw_required(&mut self,
         system: &dyn UxnSystemScreenInterface) -> bool {
         if system.get_system_colors(&mut self.system_colors_raw) {
@@ -158,46 +163,39 @@ impl ScreenDevice {
         return self.changed;
     }
 
-    // TODO change into simpler 'draw' function
-    pub fn draw_if_changed(&mut self,
-                       system: &dyn UxnSystemScreenInterface,
-                       draw_fn: &mut dyn FnMut(&[u16; 2], &[u8])) {
-        // if system.get_system_colors(&mut self.system_colors_raw) {
-        //     self.changed = true;
-        //     self.update_system_colors();
-        // }
+    // update the internal buffer containing the pixels to be rendered. Pass a reference to this
+    // buffer, and the dimensions of the screen, to `draw_fn`, which can be used to render to the
+    // screen
+    pub fn draw(&mut self, draw_fn: &mut dyn FnMut(&[u16; 2], &[u8])) {
+        let mut fg_pixels = self.layers[FG].pixels.iter().flatten();
+        let mut bg_pixels = self.layers[BG].pixels.iter().flatten();
 
-        // if self.changed {
-            let mut fg_pixels = self.layers[FG].pixels.iter().flatten();
-            let mut bg_pixels = self.layers[BG].pixels.iter().flatten();
+        let mut pixel_iter = self.pixels.iter_mut();
+        for (fg_pixel, bg_pixel) in fg_pixels.zip(bg_pixels) {
+            let color = match fg_pixel {
+                UxnColorIndex::Zero => {
+                    bg_pixel
+                },
+                _ => fg_pixel,
+            };
+            let color = &self.system_colors[color];
 
-            let mut pixel_iter = self.pixels.iter_mut();
-            for (fg_pixel, bg_pixel) in fg_pixels.zip(bg_pixels) {
-                let color = match fg_pixel {
-                    UxnColorIndex::Zero => {
-                        bg_pixel
-                    },
-                    _ => fg_pixel,
-                };
-                let color = &self.system_colors[color];
+            let screen_pixel_r = pixel_iter.next().unwrap();
+            let screen_pixel_g = pixel_iter.next().unwrap();
+            let screen_pixel_b = pixel_iter.next().unwrap();
 
-                let screen_pixel_r = pixel_iter.next().unwrap();
-                let screen_pixel_g = pixel_iter.next().unwrap();
-                let screen_pixel_b = pixel_iter.next().unwrap();
+            *screen_pixel_r = color[0];
+            *screen_pixel_g = color[1];
+            *screen_pixel_b = color[2];
+        }
 
-                *screen_pixel_r = color[0];
-                *screen_pixel_g = color[1];
-                *screen_pixel_b = color[2];
-            }
+        let dim = [
+            u16::from_be_bytes([self.dim[0][0], self.dim[0][1]]),
+            u16::from_be_bytes([self.dim[1][0], self.dim[1][1]]),
+        ];
 
-            let dim = [
-                u16::from_be_bytes([self.dim[0][0], self.dim[0][1]]),
-                u16::from_be_bytes([self.dim[1][0], self.dim[1][1]]),
-            ];
-
-            draw_fn(&dim, &self.pixels);
-            self.changed = false;
-        // }
+        draw_fn(&dim, &self.pixels);
+        self.changed = false;
     }
 
     fn resize(&mut self) {
@@ -349,15 +347,17 @@ mod tests {
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
 
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[0x1f, 0x2f], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
     }
 
-    // drawing a pixel to screen, assert that calling draw_if_changed only calls the inner draw
-    // function if something has changed
+    // drawing a pixel to screen, assert that calling get_draw_required only returns true if
+    // something has changed
     #[test]
     fn test_pixel_write_repeated() {
         let mut screen = ScreenDevice::new(&[16, 9]);
@@ -379,17 +379,15 @@ mod tests {
             .into_iter().flatten().collect::<Vec<_>>();
 
         // on first draw, assert we get what is expected
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
 
-        // calling draw_if_changed with no change should not call draw_fn
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
-            panic!("was not expecting draw_fn to be called after repeat");
-        };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        // calling draw_if_changed with no change should mean that get_draw_required returns false
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), false);
 
         // set location to (0, 0) and draw a pixel colour index 1 (on foreground)
         screen.write(0x9, 0, &mut mock_ram_interface);
@@ -403,14 +401,15 @@ mod tests {
         expected_pixels[16*0 + 0] = [0x11, 0x55, 0x99];
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
     }
 
-    // test that changing system colors counts as a change in draw_if_changed
+    // test that changing system colors counts as a change in get_draw_required
     #[test]
     fn test_system_color_change() {
         let mut screen = ScreenDevice::new(&[16, 9]);
@@ -432,11 +431,12 @@ mod tests {
             .into_iter().flatten().collect::<Vec<_>>();
 
         // on first draw, assert we get what is expected
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true); 
+        screen.draw(&mut draw_fn);
 
         // change the system colors
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
@@ -447,12 +447,13 @@ mod tests {
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
         let called = RefCell::new(false);
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
             *called.borrow_mut() = true;
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true); 
+        screen.draw(&mut draw_fn);
         assert_eq!(*called.borrow(), true);
     }
 
@@ -479,11 +480,12 @@ mod tests {
             .into_iter().flatten().collect::<Vec<_>>();
 
         // on first draw, assert we get what is expected
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
 
         // set the foreground to color index 1 and paint the pixel
         let color = 0x41; 
@@ -495,11 +497,12 @@ mod tests {
             .into_iter().flatten().collect::<Vec<_>>();
 
         // assert that now foreground is drawn over the background
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
 
         // set foreground to color index 0 so that background should show
         // through again
@@ -511,11 +514,12 @@ mod tests {
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
 
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
     }
 
     // test that after a screen dimension change, the screen is cleared
@@ -540,11 +544,12 @@ mod tests {
             .into_iter().flatten().collect::<Vec<_>>();
 
         // on first draw, assert we get what is expected
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
 
         // change the width dimension
         let new_width = 12_u16;
@@ -557,12 +562,13 @@ mod tests {
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
         let called = RefCell::new(false);
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[12, 9], dim);
             *called.borrow_mut() = true;
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
         assert_eq!(*called.borrow(), true);
 
         // change the height dimension
@@ -576,12 +582,13 @@ mod tests {
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
         let called = RefCell::new(false);
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[12, 4], dim);
             *called.borrow_mut() = true;
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
         assert_eq!(*called.borrow(), true);
     }
 
@@ -615,11 +622,12 @@ mod tests {
             .into_iter().flatten().collect::<Vec<_>>();
 
         // on first draw, assert we get what is expected
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
 
         // set the foreground to colour index 1 and paint the pixel
         let color = 0x11; 
@@ -631,11 +639,12 @@ mod tests {
         expected_pixels[16*3 + 3] = [0x11, 0x55, 0x99];
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
 
         // set the auto byte to increment x and y simulataneously
         screen.write(0x6, 0x3, &mut mock_ram_interface);
@@ -662,10 +671,11 @@ mod tests {
         expected_pixels[16*4 + 5] = [0x11, 0x55, 0x99];
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
-        let draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
             assert_eq!(&[16, 9], dim);
         };
-        screen.draw_if_changed(&mock_system_screen_interface, &draw_fn);
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
     }
 }

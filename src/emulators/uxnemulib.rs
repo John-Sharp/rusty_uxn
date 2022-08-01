@@ -99,9 +99,7 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
             graphics.draw_image((0.0, 0.0), &image_handle);
         };
 
-        self.devices.screen_device.draw_if_changed(
-            &self.uxn,
-            &mut draw_fn);
+        self.devices.screen_device.draw(&mut draw_fn);
     }
 
     fn on_start(&mut self, _helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
