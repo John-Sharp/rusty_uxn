@@ -21,6 +21,11 @@
 
 ;bg-img ;draw-img JSR2
 
+#0000 .Screen/x DEO2
+#0000 .Screen/y DEO2
+;sprite .Screen/addr DEO2
+#82 .Screen/sprite DEO
+
 BRK
 
 
@@ -81,3 +86,8 @@ BRK
 &data
 42 40
 40 42
+
+@sprite
+ffff ff00 00ff ffff
+ff00 0000 0000 0000
+( 0f38 675f dfbf bfbf )
