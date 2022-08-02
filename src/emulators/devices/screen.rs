@@ -56,7 +56,9 @@ pub struct ScreenDevice {
     changed: bool,
     vector: [u8; 2],
     target_location: [[u8; 2]; 2],
+    sprite_address: [u8; 2],
     last_pixel_value: u8,
+    last_sprite_value: u8,
     system_colors_raw: [u8; 6],
     system_colors: HashMap<UxnColorIndex, [u8; 3]>,
     sprite_repeat: u8,
@@ -78,6 +80,7 @@ impl ScreenDevice {
             changed: true,
             vector: [0; 2],
             target_location: [[0; 2], [0; 2]],
+            sprite_address: [0; 2],
             last_pixel_value: 0,
             system_colors_raw: [0; 6],
             system_colors: HashMap::from([
@@ -114,6 +117,51 @@ impl ScreenDevice {
         if self.auto_inc_y {
             [self.target_location[1][0], self.target_location[1][1]] = (target_y + 1).to_be_bytes();
         }
+    }
+
+    // TODO doesn't need to be a method
+    fn get_palette(&self, choice: u8) -> [UxnColorIndex; 4] {
+        if (choice > 0xf) {
+            panic!("get_palette called with invalid palette choice");
+        }
+
+        let palettes = [
+            [UxnColorIndex::Zero, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+            [UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+            [UxnColorIndex::Zero, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+            [UxnColorIndex::Zero, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+            [UxnColorIndex::One, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+            [UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+            [UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+            [UxnColorIndex::One, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+            [UxnColorIndex::Two, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+            [UxnColorIndex::Two, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+            [UxnColorIndex::Zero, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+            [UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+            [UxnColorIndex::Three, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+            [UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+            [UxnColorIndex::Three, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+            [UxnColorIndex::Zero, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+        ];
+
+        return palettes[choice].clone();
+    }
+
+    fn sprite_write(&mut self, val: u8) {
+        // TODO use self.sprite_repeat
+        // TODO use self.auto_inc_*
+        // TODO support 2bpp
+        // TODO support flipx, flipy
+        let palette_choice = val & 0xf;
+
+        // whether to interpret a sprite pixel drawn with value 0 as transparent (i.e. just not
+        // drawn) or as painted
+        let color_0_transparent = if palette_choice != 0 && palette_choice % 5 == 0 { true } else { false }; 
+
+        let palette = self.get_palette(palette_choice);
+
+        // TODO iterate through bits of sprite, construct palette index, lookup color
+        // and paint the pixel on the appropriate layer
     }
 
     fn update_system_colors(&mut self) {
@@ -260,9 +308,19 @@ impl Device for ScreenDevice {
             0xb => {
                 self.target_location[1][1] = val;
             },
+            0xc => {
+                self.sprite_address[0] = val;
+            },
+            0xd => {
+                self.sprite_address[1] = val;
+            },
             0xe => {
                 self.last_pixel_value = val;
                 self.pixel_write(val);
+            },
+            0xf => {
+                self.last_sprite_value = val;
+                self.sprite_write(val);
             },
             _ => {}
         }
