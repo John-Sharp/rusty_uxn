@@ -21,10 +21,15 @@
 
 ;bg-img ;draw-img JSR2
 
-#0000 .Screen/x DEO2
-#0000 .Screen/y DEO2
-;sprite .Screen/addr DEO2
-#82 .Screen/sprite DEO
+#0100 .Screen/x DEO2
+#0100 .Screen/y DEO2
+;sprite1bpp .Screen/addr DEO2
+#02 .Screen/sprite DEO
+
+#0108 .Screen/x DEO2
+#0108 .Screen/y DEO2
+;sprite2bpp .Screen/addr DEO2
+#c2 .Screen/sprite DEO
 
 BRK
 
@@ -87,7 +92,9 @@ BRK
 42 40
 40 42
 
-@sprite
-ffff ff00 00ff ffff
-ff00 0000 0000 0000
+@sprite1bpp
+3c7e 5a7f 1b3c 5a18
 ( 0f38 675f dfbf bfbf )
+
+@sprite2bpp
+017f 7b73 6343 7fff   007c 7c7c 7c7c 0000
