@@ -26,10 +26,10 @@
 ;sprite1bpp .Screen/addr DEO2
 #02 .Screen/sprite DEO
 
-#0108 .Screen/x DEO2
+( #0108 .Screen/x DEO2
 #0108 .Screen/y DEO2
 ;sprite2bpp .Screen/addr DEO2
-#c2 .Screen/sprite DEO
+#c2 .Screen/sprite DEO )
 
 BRK
 

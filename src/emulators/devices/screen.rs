@@ -5,7 +5,7 @@ pub trait UxnSystemScreenInterface {
     fn get_system_colors(&self, colors: &mut [u8; 6]) -> bool;
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UxnColorIndex {
     Zero,
     One,
@@ -70,6 +70,8 @@ pub struct ScreenDevice {
 const FG: usize = 0;
 const BG: usize = 1;
 
+const SPRITE_SIZE_1BPP: u16 = 8;
+
 impl ScreenDevice {
     pub fn new(dimensions: &[u16; 2]) -> Self {
         ScreenDevice {
@@ -82,6 +84,7 @@ impl ScreenDevice {
             target_location: [[0; 2], [0; 2]],
             sprite_address: [0; 2],
             last_pixel_value: 0,
+            last_sprite_value: 0,
             system_colors_raw: [0; 6],
             system_colors: HashMap::from([
                 (UxnColorIndex::Zero, [0,0,0]),
@@ -121,7 +124,7 @@ impl ScreenDevice {
 
     // TODO doesn't need to be a method
     fn get_palette(&self, choice: u8) -> [UxnColorIndex; 4] {
-        if (choice > 0xf) {
+        if choice > 0xf {
             panic!("get_palette called with invalid palette choice");
         }
 
@@ -144,10 +147,10 @@ impl ScreenDevice {
             [UxnColorIndex::Zero, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
         ];
 
-        return palettes[choice].clone();
+        return palettes[choice as usize].clone();
     }
 
-    fn sprite_write(&mut self, val: u8) {
+    fn sprite_write(&mut self, val: u8, main_ram: &mut dyn MainRamInterface) {
         // TODO use self.sprite_repeat
         // TODO use self.auto_inc_*
         // TODO support 2bpp
@@ -159,6 +162,42 @@ impl ScreenDevice {
         let color_0_transparent = if palette_choice != 0 && palette_choice % 5 == 0 { true } else { false }; 
 
         let palette = self.get_palette(palette_choice);
+
+        let sprite_address = u16::from_be_bytes(
+            [self.sprite_address[0], self.sprite_address[1]]);
+
+        let sprite_bytes = main_ram.read(sprite_address, SPRITE_SIZE_1BPP).expect(
+            "could not read sprite bytes from memory");
+
+        let target_x = u16::from_be_bytes(
+            [self.target_location[0][0], self.target_location[0][1]]);
+        let target_y = u16::from_be_bytes(
+            [self.target_location[1][0], self.target_location[1][1]]);
+
+        let layer = (val >> 6) & 1;
+        let layer = if layer == 0 { BG } else { FG };
+
+        let mut current_y = target_y;
+        for bit_row in sprite_bytes {
+            let mut current_x = target_x;
+
+            for bit_index_x in (0..7).rev() {
+                let sprite_pixel_val = (bit_row >> bit_index_x) & 1;
+
+                if sprite_pixel_val == 0 && color_0_transparent {
+                    // draw nothing
+                } else {
+                    let pixel_color_index = palette[sprite_pixel_val as usize]; 
+
+                    if self.layers[layer].set_pixel(&[current_x, current_y], pixel_color_index) {
+                        self.changed = true;
+                    }
+                }
+
+                current_x = current_x + 1;
+            }
+            current_y = current_y + 1;
+        }
 
         // TODO iterate through bits of sprite, construct palette index, lookup color
         // and paint the pixel on the appropriate layer
@@ -266,7 +305,7 @@ impl ScreenDevice {
 }
 
 impl Device for ScreenDevice {
-    fn write(&mut self, port: u8, val: u8, _main_ram: &mut dyn MainRamInterface) {
+    fn write(&mut self, port: u8, val: u8, main_ram: &mut dyn MainRamInterface) {
         if port > 0xf {
             panic!("attempting to write to port out of range");
         }
@@ -320,7 +359,7 @@ impl Device for ScreenDevice {
             },
             0xf => {
                 self.last_sprite_value = val;
-                self.sprite_write(val);
+                self.sprite_write(val, main_ram);
             },
             _ => {}
         }
