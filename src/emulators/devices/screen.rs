@@ -156,6 +156,8 @@ impl ScreenDevice {
         // TODO support 2bpp
         // TODO support flipx, flipy
         let palette_choice = val & 0xf;
+        let flip_x = if (val & 0x10) != 0 { true } else { false };
+        let flip_y = if (val & 0x20) != 0 { true } else { false };
 
         // whether to interpret a sprite pixel drawn with value 0 as transparent (i.e. just not
         // drawn) or as painted
@@ -177,11 +179,13 @@ impl ScreenDevice {
         let layer = (val >> 6) & 1;
         let layer = if layer == 0 { BG } else { FG };
 
-        let mut current_y = target_y;
+        let mut current_y = if flip_y { target_y + 7 } else { target_y };
+        let increment_x = if flip_x { -1 } else { 1 };
+        let increment_y = if flip_y { -1 } else { 1 };
         for bit_row in sprite_bytes {
-            let mut current_x = target_x;
+            let mut current_x = if flip_x { target_x + 7 } else { target_x };
 
-            for bit_index_x in (0..7).rev() {
+            for bit_index_x in (0..8).rev() {
                 let sprite_pixel_val = (bit_row >> bit_index_x) & 1;
 
                 if sprite_pixel_val == 0 && color_0_transparent {
@@ -194,13 +198,11 @@ impl ScreenDevice {
                     }
                 }
 
-                current_x = current_x + 1;
+                current_x = (i32::try_from(current_x).unwrap() + increment_x) as u16;
             }
-            current_y = current_y + 1;
-        }
 
-        // TODO iterate through bits of sprite, construct palette index, lookup color
-        // and paint the pixel on the appropriate layer
+            current_y = (i32::try_from(current_y).unwrap() + increment_y) as u16;
+        }
     }
 
     fn update_system_colors(&mut self) {
