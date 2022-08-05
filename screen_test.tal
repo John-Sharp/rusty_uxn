@@ -21,6 +21,9 @@
 
 ;bg-img ;draw-img JSR2
 
+( set auto byte )
+#15 .Screen/auto DEO
+
 #0100 .Screen/x DEO2
 #0100 .Screen/y DEO2
 ;sprite1bpp .Screen/addr DEO2
@@ -95,6 +98,9 @@ BRK
 @sprite1bpp
 3c7e 5a7f 1b3c 5a18
 ( 0f38 675f dfbf bfbf )
+
+@spriteb1bpp
+017f 7b73 6343 7fff
 
 @sprite2bpp
 017f 7b73 6343 7fff   007c 7c7c 7c7c 0000

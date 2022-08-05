@@ -150,11 +150,8 @@ impl ScreenDevice {
         return palettes[choice as usize].clone();
     }
 
-    fn sprite_write(&mut self, val: u8, main_ram: &mut dyn MainRamInterface) {
-        // TODO use self.sprite_repeat
-        // TODO use self.auto_inc_*
+    fn sprites_write(&mut self, val: u8, main_ram: &mut dyn MainRamInterface) {
         // TODO support 2bpp
-        // TODO support flipx, flipy
         let palette_choice = val & 0xf;
         let flip_x = if (val & 0x10) != 0 { true } else { false };
         let flip_y = if (val & 0x20) != 0 { true } else { false };
@@ -163,21 +160,37 @@ impl ScreenDevice {
         // drawn) or as painted
         let color_0_transparent = if palette_choice != 0 && palette_choice % 5 == 0 { true } else { false }; 
 
-        let palette = self.get_palette(palette_choice);
-
-        let sprite_address = u16::from_be_bytes(
+        let mut sprite_address = u16::from_be_bytes(
             [self.sprite_address[0], self.sprite_address[1]]);
 
-        let sprite_bytes = main_ram.read(sprite_address, SPRITE_SIZE_1BPP).expect(
-            "could not read sprite bytes from memory");
+        let palette = self.get_palette(palette_choice);
 
-        let target_x = u16::from_be_bytes(
+        let mut target_x = u16::from_be_bytes(
             [self.target_location[0][0], self.target_location[0][1]]);
-        let target_y = u16::from_be_bytes(
+        let mut target_y = u16::from_be_bytes(
             [self.target_location[1][0], self.target_location[1][1]]);
 
         let layer = (val >> 6) & 1;
         let layer = if layer == 0 { BG } else { FG };
+
+        for _i in 0..self.sprite_repeat+1 {
+            self.sprite_write(sprite_address, layer, target_x, target_y, 
+                              &palette, color_0_transparent,
+                              flip_x, flip_y, main_ram);
+            sprite_address += if self.auto_inc_address { 8 } else { 0 };
+            target_x += if self.auto_inc_x { 8 } else { 0 };
+            target_y += if self.auto_inc_y { 8 } else { 0 };
+        }
+
+        // TODO save sprite_address and target_location if auto incremented
+    }
+
+    fn sprite_write(&mut self, sprite_address: u16, layer: usize, target_x: u16, target_y: u16,
+                    palette: &[UxnColorIndex; 4], color_0_transparent: bool,
+                    flip_x: bool, flip_y: bool,
+                    main_ram: &mut dyn MainRamInterface) {
+        let sprite_bytes = main_ram.read(sprite_address, SPRITE_SIZE_1BPP).expect(
+            "could not read sprite bytes from memory");
 
         let mut current_y = if flip_y { target_y + 7 } else { target_y };
         let increment_x = if flip_x { -1 } else { 1 };
@@ -300,7 +313,7 @@ impl ScreenDevice {
 
     fn set_auto(&mut self, val: u8) {
         self.sprite_repeat = val >> 4;
-        self.auto_inc_address = if (val & 0x04) == 1 { true } else { false };
+        self.auto_inc_address = if (val & 0x04) != 0 { true } else { false };
         self.auto_inc_x = if (val & 0x01) != 0 { true } else { false };
         self.auto_inc_y = if (val & 0x02) != 0 { true } else { false };
     }
@@ -361,7 +374,7 @@ impl Device for ScreenDevice {
             },
             0xf => {
                 self.last_sprite_value = val;
-                self.sprite_write(val, main_ram);
+                self.sprites_write(val, main_ram);
             },
             _ => {}
         }
