@@ -182,7 +182,24 @@ impl ScreenDevice {
             target_y += if self.auto_inc_y { 8 } else { 0 };
         }
 
-        // TODO save sprite_address and target_location if auto incremented
+        // save sprite_address and target_location if auto incremented.
+        // Slightly strange in that sprite address is incremented by as many
+        // times it was repeated plus 1, whereas target_location is only incremented
+        // by one sprite's width/height, but that's what the reference implementation
+        // does...
+        if self.auto_inc_address {
+            [self.sprite_address[0], self.sprite_address[1]] = sprite_address.to_be_bytes();
+        }
+        if self.auto_inc_x {
+            let target_x = u16::from_be_bytes(
+                [self.target_location[0][0], self.target_location[0][1]]);
+            [self.target_location[0][0], self.target_location[0][1]] = (target_x + 1).to_be_bytes();
+        }
+        if self.auto_inc_y {
+            let target_y = u16::from_be_bytes(
+                [self.target_location[1][0], self.target_location[1][1]]);
+            [self.target_location[1][0], self.target_location[1][1]] = (target_y + 1).to_be_bytes();
+        }
     }
 
     fn sprite_write(&mut self, sprite_address: u16, two_bpp: bool, layer: usize, target_x: u16, target_y: u16,
