@@ -437,11 +437,28 @@ mod tests {
     use super::*;
     use crate::emulators::uxn::device::MainRamInterfaceError;
     use std::cell::RefCell;
+    use std::collections::VecDeque;
 
-    struct MockMainRamInterface {}
+    struct MockMainRamInterface {
+        read_arguments_received: RefCell<VecDeque<(u16, u16,)>>,
+        read_values_to_return: RefCell<VecDeque<Result<Vec<u8>, MainRamInterfaceError>>>,
+    }
+    impl MockMainRamInterface {
+        fn new() -> Self {
+            MockMainRamInterface{
+                read_arguments_received: RefCell::new(VecDeque::new()),
+                read_values_to_return: RefCell::new(VecDeque::new()),
+            }
+        }
+    }
     impl MainRamInterface for MockMainRamInterface {
-        fn read(&self, _address: u16, _num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
-            panic!("should not be called");
+        fn read(&self, address: u16, num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+            self.read_arguments_received.borrow_mut()
+                .push_back((address, num_bytes));
+            return self.read_values_to_return
+                .borrow_mut()
+                .pop_front()
+                .unwrap();
         }
 
         fn write(&mut self, _address: u16, _bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
@@ -469,7 +486,7 @@ mod tests {
     #[test]
     fn test_pixel_draw() {
         let mut screen = ScreenDevice::new(&[0x1f, 0x2f]);
-        let mut mock_ram_interface = MockMainRamInterface{};
+        let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
 
@@ -504,7 +521,7 @@ mod tests {
     #[test]
     fn test_pixel_write_repeated() {
         let mut screen = ScreenDevice::new(&[16, 9]);
-        let mut mock_ram_interface = MockMainRamInterface{};
+        let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
 
@@ -556,7 +573,7 @@ mod tests {
     #[test]
     fn test_system_color_change() {
         let mut screen = ScreenDevice::new(&[16, 9]);
-        let mut mock_ram_interface = MockMainRamInterface{};
+        let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
 
@@ -605,7 +622,7 @@ mod tests {
     #[test]
     fn test_foreground_background() {
         let mut screen = ScreenDevice::new(&[16, 9]);
-        let mut mock_ram_interface = MockMainRamInterface{};
+        let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
 
@@ -669,7 +686,7 @@ mod tests {
     #[test]
     fn test_dimension_change() {
         let mut screen = ScreenDevice::new(&[16, 9]);
-        let mut mock_ram_interface = MockMainRamInterface{};
+        let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
 
@@ -739,7 +756,7 @@ mod tests {
     #[test]
     fn test_auto_inc_pixel() {
         let mut screen = ScreenDevice::new(&[16, 9]);
-        let mut mock_ram_interface = MockMainRamInterface{};
+        let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
 
@@ -820,5 +837,72 @@ mod tests {
         };
         assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
         screen.draw(&mut draw_fn);
+    }
+
+    // draw a 1bpp sprite and when the draw function is called check the correct
+    // bit map is drawn
+    #[test]
+    fn test_sprite_draw() {
+        let mut screen = ScreenDevice::new(&[0x0f, 0x0f]);
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (0x01, 0x03)
+        let target_x = 0x01u16;
+        screen.write(0x8, target_x.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x.to_be_bytes()[1], &mut mock_ram_interface);
+        let target_y = 0x03u16;
+        screen.write(0xa, target_y.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // fill the mock ram with data for a 1bpp sprite
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([Ok(vec![0xf0, 0xf0, 0xf0, 0xf0, 0x0f, 0x0f, 0x0f, 0x0f,]),]));
+
+        // set the address for the sprite
+        let test_sprite_address = 0xaabbu16;
+        screen.write(0xc, test_sprite_address.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xd, test_sprite_address.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // paint the sprite, using palette of index 6. Bits in the sprite data of value 1 will be
+        // colored UxnColorIndex::Two (rgb 0x22,0x66, 0xaa), bits in the sprite data of value 0
+        // will be colored UxnColorIndex::One (rbg 0x11, 0x55, 0x99)
+        let val = 0x06; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x0f];
+        for row in 0..4 {
+            for col in 0..4 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+            for col in 4..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+        }
+        for row in 4..8 {
+            for col in 0..4 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+            for col in 4..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x0f], dim);
+        };
+
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+
+        // TODO test that sprite address was passed to read with correct length
     }
 }
