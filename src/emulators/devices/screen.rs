@@ -151,10 +151,10 @@ impl ScreenDevice {
     }
 
     fn sprites_write(&mut self, val: u8, main_ram: &mut dyn MainRamInterface) {
-        // TODO support 2bpp
         let palette_choice = val & 0xf;
         let flip_x = if (val & 0x10) != 0 { true } else { false };
         let flip_y = if (val & 0x20) != 0 { true } else { false };
+        let two_bpp = if (val & 0x80) != 0 { true } else { false };
 
         // whether to interpret a sprite pixel drawn with value 0 as transparent (i.e. just not
         // drawn) or as painted
@@ -174,7 +174,7 @@ impl ScreenDevice {
         let layer = if layer == 0 { BG } else { FG };
 
         for _i in 0..self.sprite_repeat+1 {
-            self.sprite_write(sprite_address, layer, target_x, target_y, 
+            self.sprite_write(sprite_address, two_bpp, layer, target_x, target_y, 
                               &palette, color_0_transparent,
                               flip_x, flip_y, main_ram);
             sprite_address += if self.auto_inc_address { 8 } else { 0 };
@@ -185,21 +185,35 @@ impl ScreenDevice {
         // TODO save sprite_address and target_location if auto incremented
     }
 
-    fn sprite_write(&mut self, sprite_address: u16, layer: usize, target_x: u16, target_y: u16,
+    fn sprite_write(&mut self, sprite_address: u16, two_bpp: bool, layer: usize, target_x: u16, target_y: u16,
                     palette: &[UxnColorIndex; 4], color_0_transparent: bool,
                     flip_x: bool, flip_y: bool,
                     main_ram: &mut dyn MainRamInterface) {
         let sprite_bytes = main_ram.read(sprite_address, SPRITE_SIZE_1BPP).expect(
             "could not read sprite bytes from memory");
 
+        // for two bpp sprites the higher bit comes from the next SPRITE_SIZE_1BPP 
+        // bytes of memory. In case of one bpp sprites can therefore just replace
+        // this with SPRITE_SIZE_1BPP's worth of zeros
+        let higher_sprite_bytes = if two_bpp {
+            // read from sprite_address + SPRITE_SIZE_1BPP
+            main_ram.read(sprite_address+SPRITE_SIZE_1BPP, SPRITE_SIZE_1BPP).expect(
+                "could not read upper sprite bytes from memory")
+        } else {
+            // produce SPRITE_SIZE_1BPP's worth of zeros
+            vec![0u8; SPRITE_SIZE_1BPP.into()]
+        };
+
         let mut current_y = if flip_y { target_y + 7 } else { target_y };
         let increment_x = if flip_x { -1 } else { 1 };
         let increment_y = if flip_y { -1 } else { 1 };
-        for bit_row in sprite_bytes {
+        for (bit_row_higher, bit_row) in higher_sprite_bytes.iter().zip(sprite_bytes) {
             let mut current_x = if flip_x { target_x + 7 } else { target_x };
 
             for bit_index_x in (0..8).rev() {
-                let sprite_pixel_val = (bit_row >> bit_index_x) & 1;
+                let sprite_pixel_val_higher_bit = (bit_row_higher >> bit_index_x) & 1;
+                let sprite_pixel_val_lower_bit = (bit_row >> bit_index_x) & 1;
+                let sprite_pixel_val = (sprite_pixel_val_higher_bit << 1) | sprite_pixel_val_lower_bit;
 
                 if sprite_pixel_val == 0 && color_0_transparent {
                     // draw nothing

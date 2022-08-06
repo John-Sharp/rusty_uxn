@@ -29,6 +29,12 @@
 ;sprite1bpp .Screen/addr DEO2
 #32 .Screen/sprite DEO
 
+#00 .Screen/auto DEO
+#0100 .Screen/x DEO2
+#0080 .Screen/y DEO2
+;sprite2bpp .Screen/addr DEO2
+#82 .Screen/sprite DEO
+
 ( #0108 .Screen/x DEO2
 #0108 .Screen/y DEO2
 ;sprite2bpp .Screen/addr DEO2
