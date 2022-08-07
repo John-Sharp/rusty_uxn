@@ -903,6 +903,299 @@ mod tests {
         assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
         screen.draw(&mut draw_fn);
 
-        // TODO test that sprite address was passed to read with correct length
+        // test that sprite address was passed to 'read()' with correct length
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+
+        assert_eq!(received_address, test_sprite_address);
+        let expected_sprite_len = 8;
+        assert_eq!(received_len, expected_sprite_len);
     }
+
+    // draw a 1bpp sprite, with the 'flip x' flag, and then with the 'flip y' flag, when the draw
+    // function is called check the correct bit map is drawn in each case
+    #[test]
+    fn test_sprite_draw_flip_x_flip_y() {
+        let mut screen = ScreenDevice::new(&[0x0f, 0x0f]);
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (0x01, 0x03)
+        let target_x = 0x01u16;
+        screen.write(0x8, target_x.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x.to_be_bytes()[1], &mut mock_ram_interface);
+        let target_y = 0x03u16;
+        screen.write(0xa, target_y.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // fill the mock ram with data for a 1bpp sprite
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([Ok(vec![0xf0, 0xf0, 0xf0, 0xf0, 0x0f, 0x0f, 0x0f, 0x0f,]),]));
+
+        // set the address for the sprite
+        let test_sprite_address = 0xaabbu16;
+        screen.write(0xc, test_sprite_address.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xd, test_sprite_address.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // paint the sprite, using palette of index 6, with the 'flip x' flag on
+        let val = 0x16; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x0f];
+        for row in 0..4 {
+            for col in 4..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+            for col in 0..4 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+        }
+        for row in 4..8 {
+            for col in 4..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+            for col in 0..4 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x0f], dim);
+        };
+
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+
+        // fill the mock ram with data for a 1bpp sprite (again)
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([Ok(vec![0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,]),]));
+
+        // paint the sprite again, using palette of index 6, with the 'flip y' flag on
+        let val = 0x26; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x0f];
+        for row in 0..4 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+        }
+        for row in 4..8 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x0f], dim);
+        };
+
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+    }
+
+    // test that a sprite on the foreground layer is shown over a sprite in the background layer
+    // test that transparency works
+    #[test]
+    fn test_sprite_draw_overlaid() {
+        let mut screen = ScreenDevice::new(&[0x0f, 0x0f]);
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (0x01, 0x03)
+        let target_x = 0x01u16;
+        screen.write(0x8, target_x.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x.to_be_bytes()[1], &mut mock_ram_interface);
+        let target_y = 0x03u16;
+        screen.write(0xa, target_y.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // fill the mock ram with data for a 1bpp sprite
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([Ok(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,]),]));
+
+        // set the address for the sprite
+        let test_sprite_address = 0xaabbu16;
+        screen.write(0xc, test_sprite_address.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xd, test_sprite_address.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // paint the sprite, using palette of index 6 onto the background
+        let val = 0x06; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {};
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+
+        // fill the mock ram with data for a second 1bpp sprite
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([Ok(vec![0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,]),]));
+
+        // paint the sprite, using palette of index 3 onto the foreground
+        let val = 0x43; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        // since palette 3 uses the color UxnColorIndex::Zero for pixels bits of value 0,
+        // those pixels should let the background sprite (colored UxnColorIndex::Two)
+        // show through. Pixels on the foreground sprite of value 1 should be colored
+        // UxnColorIndex::Three
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x0f];
+        for row in 0..4 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        for row in 4..8 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x33, 0x77, 0xbb];
+            }
+        }
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x0f], dim);
+        };
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+
+        // fill the mock ram with data for a third 1bpp sprite
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([Ok(vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,]),]));
+
+        // paint the sprite, using palette of index 5 onto the foreground
+        let val = 0x45; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        // in palette 5 a pixel bit of 0 is transparent (i.e. not painted at all),
+        // so the background and old foreground should remain
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x0f];
+        for row in 0..4 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        for row in 4..7 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x33, 0x77, 0xbb];
+            }
+        }
+        for row in 7..8 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+        }
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x0f], dim);
+        };
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+    }
+
+    // test drawing a 2bpp sprite
+    #[test]
+    fn test_sprite_draw_2bpp() {
+        let mut screen = ScreenDevice::new(&[0x0f, 0x0f]);
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (0x01, 0x03)
+        let target_x = 0x01u16;
+        screen.write(0x8, target_x.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x.to_be_bytes()[1], &mut mock_ram_interface);
+        let target_y = 0x03u16;
+        screen.write(0xa, target_y.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // fill the mock ram with data for a 2bpp sprite
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([
+                Ok(vec![0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,]),
+                Ok(vec![0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,]),
+            ],));
+
+        // set the address for the sprite
+        let test_sprite_address = 0xaabbu16;
+        screen.write(0xc, test_sprite_address.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xd, test_sprite_address.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // paint the sprite, using palette of index a
+        let val = 0x8a; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x0f];
+        // first row is all pixel values of 0x1 (UxnColorIndex::Two)
+        for row in 0..1 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        // next three rows are all pixel values of 0x3 (UxnColorIndex::One)
+        for row in 1..4 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+        }
+        // next three rows are all pixel values of 0x2 (UxnColorIndex::Three)
+        for row in 4..7 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x33, 0x77, 0xbb];
+            }
+        }
+        // final row is all pixel values of 0x0 (transparent), so background color 
+        // can remain and don't need to do anything
+
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x0f], dim);
+        };
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+
+        // test that sprite address was passed to 'read()' with correct length.
+        // 'read()' should be called twice, once with the address of the sprite,
+        // and once with the address of the sprite + 8 (to fetch the second bits
+        // for the 2bpp sprites)
+        let (received_address_1, received_len_1) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address_1, test_sprite_address);
+        let expected_sprite_len = 8;
+        assert_eq!(received_len_1, expected_sprite_len);
+
+        let (received_address_2, received_len_2) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address_2, test_sprite_address + 8);
+        assert_eq!(received_len_2, expected_sprite_len);
+    }
+
+    // TODO test sprite addresses too near end of address space
+    // TODO test repeated painting
+    // TODO test auto increment
+    // TODO test painting sprite going off the screen
 }
