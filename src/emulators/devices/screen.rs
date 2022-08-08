@@ -39,6 +39,13 @@ impl Layer {
     }
 
     fn set_pixel(&mut self, coordinate: &[u16; 2], color: UxnColorIndex) -> bool {
+        if usize::from(coordinate[0]) >= self.pixels[0].len() {
+            return false;
+        }
+        if usize::from(coordinate[1]) >= self.pixels.len() {
+            return false;
+        }
+
         if self.pixels[usize::from(coordinate[1])][usize::from(coordinate[0])] != color {
             self.pixels[usize::from(coordinate[1])][usize::from(coordinate[0])] = color;
             return true;
@@ -173,11 +180,17 @@ impl ScreenDevice {
         let layer = (val >> 6) & 1;
         let layer = if layer == 0 { BG } else { FG };
 
+        let address_inc = match (self.auto_inc_address, two_bpp) {
+            (true, true) => 16,
+            (true, false) => 8,
+            _ => 0,
+        };
+
         for _i in 0..self.sprite_repeat+1 {
             self.sprite_write(sprite_address, two_bpp, layer, target_x, target_y, 
                               &palette, color_0_transparent,
                               flip_x, flip_y, main_ram);
-            sprite_address += if self.auto_inc_address { 8 } else { 0 };
+            sprite_address += address_inc;
             target_x += if self.auto_inc_x { 8 } else { 0 };
             target_y += if self.auto_inc_y { 8 } else { 0 };
         }
@@ -193,12 +206,12 @@ impl ScreenDevice {
         if self.auto_inc_x {
             let target_x = u16::from_be_bytes(
                 [self.target_location[0][0], self.target_location[0][1]]);
-            [self.target_location[0][0], self.target_location[0][1]] = (target_x + 1).to_be_bytes();
+            [self.target_location[0][0], self.target_location[0][1]] = (target_x + 8).to_be_bytes();
         }
         if self.auto_inc_y {
             let target_y = u16::from_be_bytes(
                 [self.target_location[1][0], self.target_location[1][1]]);
-            [self.target_location[1][0], self.target_location[1][1]] = (target_y + 1).to_be_bytes();
+            [self.target_location[1][0], self.target_location[1][1]] = (target_y + 8).to_be_bytes();
         }
     }
 
@@ -424,6 +437,8 @@ impl Device for ScreenDevice {
             0x9 => return self.target_location[0][1],
             0xa => return self.target_location[1][0],
             0xb => return self.target_location[1][1],
+            0xc => return self.sprite_address[0],
+            0xd => return self.sprite_address[1],
             0xe => return self.last_pixel_value,
             _ => {},
         }
@@ -1194,8 +1209,236 @@ mod tests {
         assert_eq!(received_len_2, expected_sprite_len);
     }
 
-    // TODO test sprite addresses too near end of address space
-    // TODO test repeated painting
-    // TODO test auto increment
-    // TODO test painting sprite going off the screen
+    // test drawing a 1bpp sprite, repeated three times with the address of the sprite and the x
+    // coordinate  set to increment each time
+    #[test]
+    fn test_sprite_draw_repeat_address_x_inc() {
+        let mut screen = ScreenDevice::new(&[0x20, 0x0f]);
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (0x01, 0x03)
+        let target_x = 0x01u16;
+        screen.write(0x8, target_x.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x.to_be_bytes()[1], &mut mock_ram_interface);
+        let target_y = 0x03u16;
+        screen.write(0xa, target_y.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // set the auto byte to repeat a paint operation three times, and to
+        // increment x and the sprite address
+        screen.write(0x6, 0x25, &mut mock_ram_interface);
+
+        // set the address for the sprite
+        let test_sprite_address = 0xaabbu16;
+        screen.write(0xc, test_sprite_address.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xd, test_sprite_address.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // fill the mock ram with data for three 1bpp sprites
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([
+                Ok(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,]),
+                Ok(vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,]),
+                Ok(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,]),
+            ]),);
+
+        // paint the sprite, using palette 6
+        let val = 0x06; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x20*0x0f];
+        for row in 0..8 {
+            for col in 0..8 {
+                let target_pixel = 0x20*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+            for col in 8..16 {
+                let target_pixel = 0x20*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+            for col in 16..24 {
+                let target_pixel = 0x20*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x20, 0x0f], dim);
+        };
+
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+
+        // test that 'read()' function of mock_ram_interface was called three times,
+        // with the expected addresses
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address, test_sprite_address);
+        let expected_sprite_len = 8;
+        assert_eq!(received_len, expected_sprite_len);
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address, test_sprite_address+8);
+        assert_eq!(received_len, expected_sprite_len);
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address, test_sprite_address+16);
+        assert_eq!(received_len, expected_sprite_len);
+
+        // test that the sprite address has been auto incremented by n*8 (where n is number of
+        // repeats that were done)
+        let new_address = u16::from_be_bytes([screen.read(0xc), screen.read(0xd)]);
+        assert_eq!(new_address, test_sprite_address + 3*8);
+
+        // test the x location is increased by one sprite's width
+        let new_x = u16::from_be_bytes([screen.read(0x8), screen.read(0x9)]);
+        assert_eq!(new_x, target_x + 8);
+
+        // y location shouldn't be changed
+        let new_y = u16::from_be_bytes([screen.read(0xa), screen.read(0xb)]);
+        assert_eq!(new_y, target_y);
+    }
+
+    // test drawing a 2bpp sprite, repeated twice with the y coordinate  set to increment each time
+    #[test]
+    fn test_sprite_draw_2bpp_repeat_y_inc() {
+        let mut screen = ScreenDevice::new(&[0x0f, 0x20]);
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (0x01, 0x03)
+        let target_x = 0x01u16;
+        screen.write(0x8, target_x.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x.to_be_bytes()[1], &mut mock_ram_interface);
+        let target_y = 0x03u16;
+        screen.write(0xa, target_y.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // set the auto byte to repeat a paint operation twice, and to
+        // increment y
+        screen.write(0x6, 0x12, &mut mock_ram_interface);
+
+        // set the address for the sprite
+        let test_sprite_address = 0xaabbu16;
+        screen.write(0xc, test_sprite_address.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xd, test_sprite_address.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // fill the mock ram with data for the 2bpp sprite (note, the same chunk of 
+        // memory will be read for each repeat)
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([
+                Ok(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,]),
+                Ok(vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,]),
+
+                Ok(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,]),
+                Ok(vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,]),
+            ]),);
+
+        // paint the 2bpp sprite, using palette 6
+        let val = 0x86; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x20];
+        for row in 0..16 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x20], dim);
+        };
+
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+
+        // test that 'read()' function of mock_ram_interface was called four times,
+        // twice for the 16 bits needed for a 2bpp sprite, and then twice more for
+        // the second repeat
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address, test_sprite_address);
+        let expected_sprite_len = 8;
+        assert_eq!(received_len, expected_sprite_len);
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address, test_sprite_address+8);
+        assert_eq!(received_len, expected_sprite_len);
+
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address, test_sprite_address);
+        assert_eq!(received_len, expected_sprite_len);
+        let (received_address, received_len) = mock_ram_interface.read_arguments_received.borrow_mut().pop_front().unwrap();
+        assert_eq!(received_address, test_sprite_address+8);
+        assert_eq!(received_len, expected_sprite_len);
+
+        // sprite address should not have been incremented
+        let new_address = u16::from_be_bytes([screen.read(0xc), screen.read(0xd)]);
+        assert_eq!(new_address, test_sprite_address);
+
+        // x location should not have been incremented
+        let new_x = u16::from_be_bytes([screen.read(0x8), screen.read(0x9)]);
+        assert_eq!(new_x, target_x);
+
+        // y location should be incremented by one sprite's width
+        let new_y = u16::from_be_bytes([screen.read(0xa), screen.read(0xb)]);
+        assert_eq!(new_y, target_y + 8);
+    }
+
+    // test painting sprite going off the screen
+    #[test]
+    fn test_sprite_draw_off_screen() {
+        let mut screen = ScreenDevice::new(&[0x0f, 0x0f]);
+        let mut mock_ram_interface = MockMainRamInterface::new();
+        let mock_system_screen_interface = MockUxnSystemScreenInterface{
+            system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
+
+        // set location to (0x0d, 0x0d)
+        let target_x = 0x0du16;
+        screen.write(0x8, target_x.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0x9, target_x.to_be_bytes()[1], &mut mock_ram_interface);
+        let target_y = 0x0du16;
+        screen.write(0xa, target_y.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xb, target_y.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // fill the mock ram with data for a 1bpp sprite
+        mock_ram_interface.read_values_to_return = RefCell::new(
+            VecDeque::from([Ok(vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,]),]));
+
+        // set the address for the sprite
+        let test_sprite_address = 0xaabbu16;
+        screen.write(0xc, test_sprite_address.to_be_bytes()[0], &mut mock_ram_interface);
+        screen.write(0xd, test_sprite_address.to_be_bytes()[1], &mut mock_ram_interface);
+
+        // paint the sprite, using palette of index 6. Bits in the sprite data of value 1 will be
+        // colored UxnColorIndex::Two (rgb 0x22,0x66, 0xaa), bits in the sprite data of value 0
+        // will be colored UxnColorIndex::One (rbg 0x11, 0x55, 0x99)
+        let val = 0x06; 
+        screen.write(0xf, val, &mut mock_ram_interface);
+
+        // because the full sprite would go off the screen, only part of the 
+        // sprite will be drawn
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x0f];
+        for row in 0..2 {
+            for col in 0..2 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+        let expected_pixels = expected_pixels
+            .into_iter().flatten().collect::<Vec<_>>();
+
+        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
+            assert_eq!(pixels, &expected_pixels);
+            assert_eq!(&[0x0f, 0x0f], dim);
+        };
+
+        assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
+        screen.draw(&mut draw_fn);
+    }
 }
