@@ -1,0 +1,28 @@
+( macros ) 
+%HALT { #010f DEO }
+
+( devices )
+
+|00 @System     [ &vector $2 &wst      $1 &rst    $1 &pad   $4 &r      $2 &g      $2 &b    $2 &debug  $1 &halt $1 ]
+|10 @Console    [ &vector $2 &read     $1 &pad    $5 &write $1 &error  $1 ]
+|20 @Screen     [ &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel  $1 &sprite $1 ]
+
+|0100 ( -> )
+
+( set system colors )
+#4c0f #ab0f #1a53 .System/b DEO2 .System/g DEO2 .System/r DEO2
+
+
+#35 .Screen/auto DEO
+#0100 .Screen/x DEO2
+#0080 .Screen/y DEO2
+;rabbitsprite .Screen/addr DEO2
+#c5 .Screen/sprite DEO
+
+BRK
+
+@rabbitsprite
+0303 0000 0202 0101   0303 0202 0000 0202
+c0c0 f8f0 f8f0 f0f8   f038 0408 040c 0800
+3c3c 3f3f 0f1f 0f0f   3f3b 3020 3020 3030
+0000 0000 c0c0 0000   0000 80c0 0000 c080
