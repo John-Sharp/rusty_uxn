@@ -12,14 +12,20 @@
 ( set system colors )
 #4c0f #ab0f #1a53 .System/b DEO2 .System/g DEO2 .System/r DEO2
 
+#0000 #0100 ;paint-rabbit JSR2
 
+#0100 #0100 ;paint-rabbit JSR2
+
+BRK
+
+@paint-rabbit (y x -- )
+
+.Screen/x DEO2 .Screen/y DEO2
 #36 .Screen/auto DEO
-#0100 .Screen/x DEO2
-#0080 .Screen/y DEO2
 ;rabbitsprite .Screen/addr DEO2
 #c5 .Screen/sprite DEOk DEOk DEOk DEO
 
-BRK
+JMP2r
 
 @rabbitsprite
 03 03 00 00 03 03 01 01    03 03 03 03 00 00 02 02

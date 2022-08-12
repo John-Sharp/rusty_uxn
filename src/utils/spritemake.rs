@@ -3,6 +3,15 @@ use std::fmt;
 use image::io::Reader as ImageReader;
 use image::Rgb;
 use std::collections::HashMap;
+use clap::Parser;
+
+/// Helper utility for creating sprite drawing routines for uxn based virtual machines
+#[derive(Parser)]
+pub struct Cli {
+    /// Path to image file to be used as basis of sprite
+    #[clap(parse(from_os_str))]
+    pub img_path: std::path::PathBuf,
+}
 
 #[derive(Debug)]
 pub struct SpriteImgDimError {
@@ -54,13 +63,36 @@ impl ColorMap {
     }
 }
 
-pub fn run() -> Result<(), Box<dyn Error>> {
+fn print_preamble(name: &str, w: u32, h: u32) {
+    println!("@paint-{} (y x -- )", name);
+    println!("");
+    println!(".Screen/x DEO2 .Screen/y DEO2");
+    println!("#{}6 .Screen/auto DEO", w-1);
+    println!(";{}sprite .Screen/addr DEO2", name);
 
-    let sprite_img = ImageReader::open("rabbit.png")?.decode()?.to_rgb8();
+    let mut deo_vec = Vec::<String>::new();
+    for _ in 0..(h-1) {
+        deo_vec.push("DEOk".to_owned());
+    }
+    deo_vec.push("DEO".to_owned());
+    println!("#c5 .Screen/sprite {}", deo_vec.join(" "));
+    println!("");
+    println!("JMP2r");
+    println!("");
+    println!("@{}sprite", name);
+}
+
+pub fn run(config: Cli) -> Result<(), Box<dyn Error>> {
+
+    let sprite_img = ImageReader::open(config.img_path.as_path())?.decode()?.to_rgb8();
+
+    let sprite_name = config.img_path.as_path().file_stem().unwrap().to_str().unwrap();
 
     if sprite_img.width() % 8 != 0 || (sprite_img.height()-1) %8 != 0 {
         return Err(Box::new(SpriteImgDimError{w: sprite_img.width(), h: sprite_img.height()}));
     }
+
+    print_preamble(sprite_name, sprite_img.width()/8, (sprite_img.height()-1)/8);
 
     let color_map = ColorMap::new(&[
         *sprite_img.get_pixel(0, 0),        
