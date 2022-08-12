@@ -12,7 +12,7 @@ pub struct SpriteImgDimError {
 
 impl fmt::Display for SpriteImgDimError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Sprite image of incorrect dimensions, width and height should be multiples of 8, given dimensions: ({}, {})", self.w, self.h)
+        write!(f, "Sprite image of incorrect dimensions, width should be multiple of 8, height should be one more than multiple of 8  given dimensions: ({}, {})", self.w, self.h)
     }
 }
 impl Error for SpriteImgDimError {}
@@ -58,15 +58,15 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     let sprite_img = ImageReader::open("rabbit.png")?.decode()?.to_rgb8();
 
-    if sprite_img.width() % 8 != 0 || sprite_img.height() %8 != 0 {
+    if sprite_img.width() % 8 != 0 || (sprite_img.height()-1) %8 != 0 {
         return Err(Box::new(SpriteImgDimError{w: sprite_img.width(), h: sprite_img.height()}));
     }
 
     let color_map = ColorMap::new(&[
-        Rgb([0x46, 0xa0, 0x13]),
-        Rgb([0xc0, 0xbe, 0xa7]),
-        Rgb([0x09, 0x00, 0x53]),
-        Rgb([0xf4, 0xf6, 0x31]),
+        *sprite_img.get_pixel(0, 0),        
+        *sprite_img.get_pixel(1, 0),        
+        *sprite_img.get_pixel(2, 0),        
+        *sprite_img.get_pixel(3, 0),        
     ]);
 
     let row_size : usize = (sprite_img.width()/8).try_into().unwrap();
@@ -74,52 +74,57 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let mut lower_bytes_row = vec![[0u8; 8]; row_size];
     let mut upper_bytes_row = vec![[0u8; 8]; row_size];
 
-    for (x, y, p) in sprite_img.enumerate_pixels() {
-        let (upper_bit, lower_bit) = color_map.get_color_index(&p)?;
+    let mut row_iter = sprite_img.enumerate_rows();
+    // just discard the first row, since that contains info about the index colors that has already
+    // been read
+    row_iter.next();
 
-        let x_i = (x/8) as usize;
-        let y_i = (y%8) as usize;
+    for (y, r) in row_iter {
+        let y = y-1; // adjust y coordinate to forget about the first row
 
-        // println!("({}, {})", x_i, y_i);
-        // println!("{} {}", sprite_img.width()/8, x_i);
+        for (x, _, p) in r {
+            let (upper_bit, lower_bit) = color_map.get_color_index(&p)?;
 
-        lower_bytes_row[x_i][y_i] = lower_bytes_row[x_i][y_i] << 1;
-        upper_bytes_row[x_i][y_i] = upper_bytes_row[x_i][y_i] << 1;
+            let x_i = (x/8) as usize;
+            let y_i = (y%8) as usize;
 
-        if lower_bit {
-            lower_bytes_row[x_i][y_i] |= 1;
-        }
-        if upper_bit {
-            upper_bytes_row[x_i][y_i] |= 1;
-        }
+            lower_bytes_row[x_i][y_i] = lower_bytes_row[x_i][y_i] << 1;
+            upper_bytes_row[x_i][y_i] = upper_bytes_row[x_i][y_i] << 1;
 
-        if y % 8 == 7 && x == sprite_img.width()-1 {
-            for (lower_bytes, upper_bytes) in lower_bytes_row.iter().zip(upper_bytes_row) {
-                let mut first = true;
-                for lower_byte in lower_bytes {
-                    if !first {
-                        print!(" ");
+            if lower_bit {
+                lower_bytes_row[x_i][y_i] |= 1;
+            }
+            if upper_bit {
+                upper_bytes_row[x_i][y_i] |= 1;
+            }
+
+            if y % 8 == 7 && x == sprite_img.width()-1 {
+                for (lower_bytes, upper_bytes) in lower_bytes_row.iter().zip(upper_bytes_row) {
+                    let mut first = true;
+                    for lower_byte in lower_bytes {
+                        if !first {
+                            print!(" ");
+                        }
+                        first = false;
+                        print!("{:02x}", lower_byte);
                     }
-                    first = false;
-                    print!("{:02x}", lower_byte);
-                }
-                print!("    ");
+                    print!("    ");
 
-                let mut first = true;
-                for upper_byte in upper_bytes {
-                    if !first {
-                        print!(" ");
+                    let mut first = true;
+                    for upper_byte in upper_bytes {
+                        if !first {
+                            print!(" ");
+                        }
+                        first = false;
+                        print!("{:02x}", upper_byte);
                     }
-                    first = false;
-                    print!("{:02x}", upper_byte);
+                    println!("");
                 }
                 println!("");
+                lower_bytes_row = vec![[0u8; 8]; row_size];
+                upper_bytes_row = vec![[0u8; 8]; row_size];
             }
-            println!("");
-            lower_bytes_row = vec![[0u8; 8]; row_size];
-            upper_bytes_row = vec![[0u8; 8]; row_size];
         }
-
     }
 
 
