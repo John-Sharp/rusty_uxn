@@ -191,15 +191,22 @@ impl ScreenDevice {
                               &palette, color_0_transparent,
                               flip_x, flip_y, main_ram);
             sprite_address += address_inc;
-            target_x += if self.auto_inc_x { 8 } else { 0 };
-            target_y += if self.auto_inc_y { 8 } else { 0 };
+
+            // if x is set to auto-increment at the end of the drawing operation then within
+            // the drawing operation increment y (this enables drawing of arbitrary rectangular
+            // sprites by setting `sprite_repeat+1` to be equal to the height of the rectangular
+            // sprite, and repeating the whole drawing operation the 'width of the sprite' times)
+            target_y += if self.auto_inc_x { 8 } else { 0 };
+
+            // similar logic for if y is set to increment at the end of the drawing operation
+            target_x += if self.auto_inc_y { 8 } else { 0 };
         }
 
         // save sprite_address and target_location if auto incremented.
-        // Slightly strange in that sprite address is incremented by as many
+        // Note that sprite address is incremented by as many
         // times it was repeated plus 1, whereas target_location is only incremented
-        // by one sprite's width/height, but that's what the reference implementation
-        // does...
+        // by one sprite's width/height, this is also to allow the drawing of arbitrary rectangular
+        // sprites described above
         if self.auto_inc_address {
             [self.sprite_address[0], self.sprite_address[1]] = sprite_address.to_be_bytes();
         }
@@ -1210,10 +1217,10 @@ mod tests {
     }
 
     // test drawing a 1bpp sprite, repeated three times with the address of the sprite and the x
-    // coordinate  set to increment each time
+    // coordinate set to auto-increment
     #[test]
     fn test_sprite_draw_repeat_address_x_inc() {
-        let mut screen = ScreenDevice::new(&[0x20, 0x0f]);
+        let mut screen = ScreenDevice::new(&[0x0f, 0x20]);
         let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
@@ -1247,27 +1254,39 @@ mod tests {
         let val = 0x06; 
         screen.write(0xf, val, &mut mock_ram_interface);
 
-        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x20*0x0f];
+        // the way auto-increment works is that the coordinate *that isn't* the one set to 
+        // auto-increment increases for each repeat of the length of sprites to be drawn 
+        // each go. So, in this example, x is the coordinate set to be incremented at
+        // the end of the draw operation, and the length of sprites to be drawn is three,
+        // so three sprites are drawn with incremented y coordinates (and, after the operation,
+        // the x coordinate stored in the screen device will be incremented, meaning that
+        // with the next draw operation, it will be at a higher x coordinate)
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x20];
         for row in 0..8 {
             for col in 0..8 {
-                let target_pixel = 0x20*(target_y+row) + target_x + col;
-                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
-            }
-            for col in 8..16 {
-                let target_pixel = 0x20*(target_y+row) + target_x + col;
-                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
-            }
-            for col in 16..24 {
-                let target_pixel = 0x20*(target_y+row) + target_x + col;
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
                 expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
             }
         }
+        for row in 8..16 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x11, 0x55, 0x99];
+            }
+        }
+        for row in 16..24 {
+            for col in 0..8 {
+                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+                expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
+            }
+        }
+
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
 
         let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
-            assert_eq!(&[0x20, 0x0f], dim);
+            assert_eq!(&[0x0f, 0x20], dim);
         };
 
         assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
@@ -1300,10 +1319,10 @@ mod tests {
         assert_eq!(new_y, target_y);
     }
 
-    // test drawing a 2bpp sprite, repeated twice with the y coordinate  set to increment each time
+    // test drawing a 2bpp sprite, repeated twice, with the y coordinate set to auto-increment
     #[test]
     fn test_sprite_draw_2bpp_repeat_y_inc() {
-        let mut screen = ScreenDevice::new(&[0x0f, 0x20]);
+        let mut screen = ScreenDevice::new(&[0x20, 0x0f]);
         let mut mock_ram_interface = MockMainRamInterface::new();
         let mock_system_screen_interface = MockUxnSystemScreenInterface{
             system_colors_raw: [0x01, 0x23, 0x45, 0x67, 0x89, 0xab]};
@@ -1340,10 +1359,12 @@ mod tests {
         let val = 0x86; 
         screen.write(0xf, val, &mut mock_ram_interface);
 
-        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x0f*0x20];
-        for row in 0..16 {
-            for col in 0..8 {
-                let target_pixel = 0x0f*(target_y+row) + target_x + col;
+        // y is set to increment at the end of the draw operation, meaning that, for the repeats
+        // within the draw operation, the x coordinate is increased
+        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 0x20*0x0f];
+        for row in 0..8 {
+            for col in 0..16 {
+                let target_pixel = 0x20*(target_y+row) + target_x + col;
                 expected_pixels[usize::from(target_pixel)] = [0x22, 0x66, 0xaa];
             }
         }
@@ -1353,7 +1374,7 @@ mod tests {
 
         let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {
             assert_eq!(pixels, &expected_pixels);
-            assert_eq!(&[0x0f, 0x20], dim);
+            assert_eq!(&[0x20, 0x0f], dim);
         };
 
         assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);

@@ -13,16 +13,31 @@
 #4c0f #ab0f #1a53 .System/b DEO2 .System/g DEO2 .System/r DEO2
 
 
-#35 .Screen/auto DEO
+#36 .Screen/auto DEO
 #0100 .Screen/x DEO2
 #0080 .Screen/y DEO2
 ;rabbitsprite .Screen/addr DEO2
-#c5 .Screen/sprite DEO
+#c5 .Screen/sprite DEOk DEOk DEOk DEO
 
 BRK
 
 @rabbitsprite
-0303 0000 0202 0101   0303 0202 0000 0202
-c0c0 f8f0 f8f0 f0f8   f038 0408 040c 0800
-3c3c 3f3f 0f1f 0f0f   3f3b 3020 3020 3030
-0000 0000 c0c0 0000   0000 80c0 0000 c080
+03 03 00 00 03 03 01 01    03 03 03 03 00 00 02 02
+c0 c0 f8 f0 f8 f0 f0 f8    f0 38 04 08 04 0c 08 00
+3c 3c 3f 3f 0f 1f 0f 0f    3f 3b 30 20 30 20 30 30
+00 00 00 00 c0 c0 00 00    00 00 80 c0 00 00 c0 80
+
+00 01 03 03 03 03 03 03    03 02 00 00 00 00 00 00
+f0 f8 f0 f0 0f 4f 0f 0f    08 04 0f 0f f0 f0 f0 f0
+1f 0f 3f 3f f0 f4 f0 f0    20 30 c0 c0 0f 0f 0f 0f
+00 00 c0 c0 c0 c0 c0 e8    80 c0 00 00 00 00 3c 14
+
+03 03 00 01 00 01 03 03    00 00 03 03 03 03 00 00
+4f cf ff fc fc fc fc fc    b0 30 00 03 03 03 03 03
+f3 f1 ff 01 cd cd cd cd    0c 0e 00 fe fe fe fe fe
+e0 f8 f8 f8 18 00 c0 c0    1c 04 04 04 e4 fc 00 00
+
+00 01 2d 1d 3f 3f 1e 00    03 03 36 3e 3e 14 1f 07
+7c fc ff ff bf 3f 00 00    83 03 00 00 40 c0 ff ff
+01 01 ff ff bf 3f 00 00    fe fe 00 00 40 c0 ff ff
+00 00 00 fe fe fe 03 03    c0 c0 ff 01 01 01 fc fc

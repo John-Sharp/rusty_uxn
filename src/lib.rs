@@ -7,3 +7,5 @@ pub mod uxnasmlib;
 
 #[cfg(feature = "emu")]
 pub mod emulators;
+
+pub mod utils;
