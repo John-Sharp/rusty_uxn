@@ -320,8 +320,8 @@ impl ScreenDevice {
     // buffer, and the dimensions of the screen, to `draw_fn`, which can be used to render to the
     // screen
     pub fn draw(&mut self, draw_fn: &mut dyn FnMut(&[u16; 2], &[u8])) {
-        let mut fg_pixels = self.layers[FG].pixels.iter().flatten();
-        let mut bg_pixels = self.layers[BG].pixels.iter().flatten();
+        let fg_pixels = self.layers[FG].pixels.iter().flatten();
+        let bg_pixels = self.layers[BG].pixels.iter().flatten();
 
         let mut pixel_iter = self.pixels.iter_mut();
         for (fg_pixel, bg_pixel) in fg_pixels.zip(bg_pixels) {

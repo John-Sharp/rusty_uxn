@@ -67,7 +67,7 @@ fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut CliDevices<
     return device_list;
 }
 
-pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_config: Config<J, K, L, M>) -> Result<(), Box<dyn Error>> {
+pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, other_config: Config<J, K, L, M>) -> Result<(), Box<dyn Error>> {
     let rom = match File::open(cli_config.rom.as_path()) {
         Ok(fp) => fp,
         Err(_err) => {
@@ -82,13 +82,13 @@ pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, mut other_con
 
     let mut uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
 
-    let mut console_device = Console::new(
+    let console_device = Console::new(
         other_config.stdout_writer,
         other_config.stderr_writer);
 
-    let mut file_device = FileDevice::new();
+    let file_device = FileDevice::new();
 
-    let mut datetime_device = DateTimeDevice::new();
+    let datetime_device = DateTimeDevice::new();
 
     let mut cli_devices = CliDevices{
         console_device, file_device, datetime_device, debug_writer: other_config.debug_writer};

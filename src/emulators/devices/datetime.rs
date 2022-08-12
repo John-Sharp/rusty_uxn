@@ -12,14 +12,8 @@ impl DateTimeDevice {
 }
 
 impl Device for DateTimeDevice {
-    fn write(&mut self, port: u8, val: u8, main_ram: &mut dyn MainRamInterface) {
-        if port > 0xf {
-            panic!("attempting to write to port out of range");
-        }
-
-        match port {
-            _ => {}
-        }
+    fn write(&mut self, _port: u8, _val: u8, _main_ram: &mut dyn MainRamInterface) {
+        // writing to date time device is a no-op
     }
 
     fn read(&mut self, port: u8) -> u8 {

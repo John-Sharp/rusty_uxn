@@ -8,6 +8,7 @@ use std::io::Read;
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
+use crate::uxninterface::UxnStatus;
 
 use speedy2d::Window;
 use speedy2d::window::{WindowHandler, WindowHelper, WindowStartupInfo, WindowCreationOptions, WindowSize};
@@ -102,8 +103,22 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
         self.devices.screen_device.draw(&mut draw_fn);
     }
 
-    fn on_start(&mut self, _helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
-        self.uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut self.devices));
+    fn on_start(&mut self, helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
+        let res = self.uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut self.devices));
+
+        match res {
+            Ok(UxnStatus::Terminate) => {
+                // gracefully close
+                helper.terminate_loop();
+            },
+            Ok(UxnStatus::Halt) => {
+                // continue rendering the screen
+            },
+            Err(e) => {
+                println!("{}", e);
+                helper.terminate_loop();
+            },
+        }
     }
 
     fn on_user_event(
@@ -138,14 +153,12 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
 
     let console_device = Console::new(io::stdout(), io::stderr());
 
-    let mut file_device = FileDevice::new();
-
-    let mut datetime_device = DateTimeDevice::new();
-
+    let file_device = FileDevice::new();
+    let datetime_device = DateTimeDevice::new();
     let screen_device = ScreenDevice::new(&INITIAL_DIMENSIONS);
-
-    let mut emu_devices = EmuDevices{
-        console_device, file_device, datetime_device, debug_writer: io::stderr(), screen_device};
+    let emu_devices = EmuDevices{
+        console_device, file_device, datetime_device, debug_writer: other_config.stderr_writer,
+        screen_device};
 
     let window_creation_options = WindowCreationOptions::new_windowed(WindowSize::PhysicalPixels(Vector2::new(INITIAL_DIMENSIONS[0].into(), INITIAL_DIMENSIONS[1].into())), None);
     let window_creation_options = window_creation_options.with_resizable(false);

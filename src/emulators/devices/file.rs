@@ -239,7 +239,7 @@ impl FileDevice {
         }
 
         f.create(true);
-        let mut f = f.open(&self.file_name);
+        let f = f.open(&self.file_name);
 
         let mut f = if let Ok(f) = f {
             f
@@ -259,7 +259,7 @@ impl FileDevice {
             return;
         };
 
-        f.write(&data_to_write);
+        f.write(&data_to_write).expect("Failed to write to file system");
     }
 }
 
