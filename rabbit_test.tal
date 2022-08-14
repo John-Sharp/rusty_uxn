@@ -1,20 +1,64 @@
 ( macros ) 
 %HALT { #010f DEO }
+%DEBUG { #010e DEO }
 
 ( devices )
 
 |00 @System     [ &vector $2 &wst      $1 &rst    $1 &pad   $4 &r      $2 &g      $2 &b    $2 &debug  $1 &halt $1 ]
 |10 @Console    [ &vector $2 &read     $1 &pad    $5 &write $1 &error  $1 ]
 |20 @Screen     [ &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel  $1 &sprite $1 ]
+|90 @Mouse      [ &vector $2 &x        $2 &y      $2 &state $1 &pad    $3 &scrollx $2 &scrolly $2 ] 
+
+
+|0000
+
+@pointer
+	&lastx $2 &lasty $2 &laststate $1
 
 |0100 ( -> )
 
 ( set system colors )
 #4c0f #ab0f #1a53 .System/b DEO2 .System/g DEO2 .System/r DEO2
 
+;mouse-handler .Mouse/vector DEO2
+
+
+
 #0000 #0100 ;paint-rabbit JSR2
 
 #0100 #0100 ;paint-rabbit JSR2
+
+BRK
+
+@mouse-handler
+
+    ( clear last cursor )
+    ;erasesprite .Screen/addr DEO2
+    #36 .Screen/auto DEO
+    .pointer/lastx LDZ2 .Screen/x DEO2
+    .pointer/lasty LDZ2 .Screen/y DEO2
+    #40 .Screen/sprite DEOk DEOk DEOk DEO
+
+    ( draw new cursor )
+    ;cursorsprite .Screen/addr DEO2
+    .Mouse/x DEI2 .Screen/x DEO2
+    .Mouse/y DEI2 .Screen/y DEO2
+    #43 .Screen/sprite DEOk DEOk DEOk DEO
+    
+    ( cache last mouse position )
+    .Mouse/x DEI2 .pointer/lastx STZ2
+    .Mouse/y DEI2 .pointer/lasty STZ2
+    
+    .Mouse/state DEI #01 EQU ,on-mouse-down JCN
+
+BRK
+
+@on-mouse-down
+
+.Mouse/y DEI2 .Mouse/x DEI2 
+;paint-rabbit JSR2
+
+.Mouse/state DEI .pointer/laststate STZ
 
 BRK
 
@@ -23,7 +67,7 @@ BRK
 .Screen/x DEO2 .Screen/y DEO2
 #36 .Screen/auto DEO
 ;rabbitsprite .Screen/addr DEO2
-#c5 .Screen/sprite DEOk DEOk DEOk DEO
+#85 .Screen/sprite DEOk DEOk DEOk DEO
 
 JMP2r
 
@@ -47,3 +91,45 @@ e0 f8 f8 f8 18 00 c0 c0    1c 04 04 04 e4 fc 00 00
 7c fc ff ff bf 3f 00 00    83 03 00 00 40 c0 ff ff
 01 01 ff ff bf 3f 00 00    fe fe 00 00 40 c0 ff ff
 00 00 00 fe fe fe 03 03    c0 c0 ff 01 01 01 fc fc
+
+@erasesprite
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff
+
+@cursorsprite
+ff ff ff ff f0 f0 f0 f0
+c7 c7 c7 c7 00 00 00 00
+e3 e3 e3 e3 00 00 00 00
+ff ff ff ff 0f 0f 0f 0f
+
+f0 f0 00 00 00 f0 f0 f0
+00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
+0f 0f 00 00 00 0f 0f 0f
+
+f0 f0 f0 00 00 00 f0 f0
+00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00
+0f 0f 0f 00 00 00 0f 0f
+
+f0 f0 f0 f0 ff ff ff ff
+00 00 00 00 c7 c7 c7 c7
+00 00 00 00 e3 e3 e3 e3
+0f 0f 0f 0f ff ff ff ff
