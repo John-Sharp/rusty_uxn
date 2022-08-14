@@ -599,7 +599,6 @@ mod tests {
             format!("---- {}\n", test_inner_dir_name),
             format!("???? {}\n", large_test_file_name),
         ]);
-        let total_len = entry_len * expected_contents.len();
         // set chunk length to be slightly more than needed to fetch
         // two entries but will require two fetches to fetch the entire
         // directory

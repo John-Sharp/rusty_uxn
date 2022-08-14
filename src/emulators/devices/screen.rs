@@ -740,7 +740,7 @@ mod tests {
         screen.write(0x3, new_width_bytes[1], &mut mock_ram_interface);
 
         // screen should now be of new dimension, and blank
-        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 12*9];
+        let expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 12*9];
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
         let called = RefCell::new(false);
@@ -760,7 +760,7 @@ mod tests {
         screen.write(0x5, new_height_bytes[1], &mut mock_ram_interface);
 
         // screen should now be of new dimension, and blank
-        let mut expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 12*4];
+        let expected_pixels = vec![[0x00_u8, 0x44_u8, 0x88_u8]; 12*4];
         let expected_pixels = expected_pixels
             .into_iter().flatten().collect::<Vec<_>>();
         let called = RefCell::new(false);
@@ -1056,7 +1056,7 @@ mod tests {
         // paint the sprite, using palette of index 6 onto the background
         let val = 0x06; 
         screen.write(0xf, val, &mut mock_ram_interface);
-        let mut draw_fn = |dim: &[u16; 2], pixels: &[u8]| {};
+        let mut draw_fn = |_dim: &[u16; 2], _pixels: &[u8]| {};
         assert_eq!(screen.get_draw_required(&mock_system_screen_interface), true);
         screen.draw(&mut draw_fn);
 
