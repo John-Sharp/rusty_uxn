@@ -18,7 +18,8 @@ use speedy2d::dimen::Vector2;
 use speedy2d::image::{ImageDataType, ImageSmoothingMode};
 
 use crate::ops::OpObjectFactory;
-use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice, screen::ScreenDevice};
+use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice, screen::ScreenDevice,
+    mouse::MouseDevice};
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
@@ -60,6 +61,7 @@ struct EmuDevices<J: Write, K: Write, M: Write> {
     datetime_device: DateTimeDevice,
     debug_writer: M,
     screen_device: ScreenDevice,
+    mouse_device: MouseDevice,
 }
 
 fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut EmuDevices<J, K, M>) -> DeviceListImpl<'_, &mut M> {
@@ -134,6 +136,16 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
             },
         }
     }
+
+    fn on_mouse_move(
+        &mut self,
+        _helper: &mut WindowHelper<UxnEvent>,
+        position: Vector2<f32>
+    ) {
+        let x = position.x as u16;
+        let y = position.y as u16;
+        self.devices.mouse_device.notify_cursor_position(&[x, y]);
+    }
 }
 
 pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Result<(), Box<dyn Error>> {
@@ -156,9 +168,10 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     let file_device = FileDevice::new();
     let datetime_device = DateTimeDevice::new();
     let screen_device = ScreenDevice::new(&INITIAL_DIMENSIONS);
+    let mouse_device = MouseDevice::new();
     let emu_devices = EmuDevices{
         console_device, file_device, datetime_device, debug_writer: other_config.stderr_writer,
-        screen_device};
+        screen_device, mouse_device};
 
     let window_creation_options = WindowCreationOptions::new_windowed(WindowSize::PhysicalPixels(Vector2::new(INITIAL_DIMENSIONS[0].into(), INITIAL_DIMENSIONS[1].into())), None);
     let window_creation_options = window_creation_options.with_resizable(false);

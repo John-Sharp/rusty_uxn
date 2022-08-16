@@ -6,3 +6,4 @@ pub mod file;
 pub mod datetime;
 
 pub mod screen;
+pub mod mouse;
