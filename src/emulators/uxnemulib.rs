@@ -85,6 +85,28 @@ struct MyWindowHandler<J: instruction::InstructionFactory, K: Write, L: Write, M
     devices: EmuDevices<K, L, M>,
 }
 
+
+impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write> MyWindowHandler<J, K, L, M> {
+    fn execute_vector(&mut self, vector: u16, helper: &mut WindowHelper<UxnEvent>) {
+        let res = self.uxn.run(vector, construct_device_list(&mut self.devices));
+
+        match res {
+            Ok(UxnStatus::Terminate) => {
+                // gracefully close
+                helper.terminate_loop();
+            },
+            Ok(UxnStatus::Halt) => {
+                // continue rendering the screen
+            },
+            Err(e) => {
+                println!("{}", e);
+                helper.terminate_loop();
+            },
+        }
+    }
+}
+
+
 impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHandler<UxnEvent> for MyWindowHandler<J, K, L, M>
 {
     fn on_draw(&mut self, _helper: &mut WindowHelper<UxnEvent>, graphics: &mut Graphics2D)
@@ -108,21 +130,8 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
 
     fn on_start(&mut self, helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
         helper.set_cursor_visible(false);
-        let res = self.uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut self.devices));
 
-        match res {
-            Ok(UxnStatus::Terminate) => {
-                // gracefully close
-                helper.terminate_loop();
-            },
-            Ok(UxnStatus::Halt) => {
-                // continue rendering the screen
-            },
-            Err(e) => {
-                println!("{}", e);
-                helper.terminate_loop();
-            },
-        }
+        self.execute_vector(uxn::INIT_VECTOR, helper);
     }
 
     fn on_user_event(
@@ -149,21 +158,7 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
         self.devices.mouse_device.notify_cursor_position(&[x, y]);
 
         let mouse_vector = self.devices.mouse_device.read_vector();
-        let res = self.uxn.run(mouse_vector, construct_device_list(&mut self.devices));
-
-        match res {
-            Ok(UxnStatus::Terminate) => {
-                // gracefully close
-                helper.terminate_loop();
-            },
-            Ok(UxnStatus::Halt) => {
-                // continue rendering the screen
-            },
-            Err(e) => {
-                println!("{}", e);
-                helper.terminate_loop();
-            },
-        }
+        self.execute_vector(mouse_vector, helper);
     }
 }
 
