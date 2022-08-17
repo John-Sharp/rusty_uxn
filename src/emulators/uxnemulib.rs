@@ -69,6 +69,7 @@ fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut EmuDevices<
     device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut devices.debug_writer));
     device_list.insert(0x1, DeviceEntry::Device(&mut devices.console_device));
     device_list.insert(0x2, DeviceEntry::Device(&mut devices.screen_device));
+    device_list.insert(0x9, DeviceEntry::Device(&mut devices.mouse_device));
     device_list.insert(0xa, DeviceEntry::Device(&mut devices.file_device));
     device_list.insert(0xc, DeviceEntry::Device(&mut devices.datetime_device));
     let device_list = DeviceListImpl::new(device_list);
@@ -106,6 +107,7 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
     }
 
     fn on_start(&mut self, helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
+        helper.set_cursor_visible(false);
         let res = self.uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut self.devices));
 
         match res {
@@ -139,12 +141,29 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
 
     fn on_mouse_move(
         &mut self,
-        _helper: &mut WindowHelper<UxnEvent>,
+        helper: &mut WindowHelper<UxnEvent>,
         position: Vector2<f32>
     ) {
         let x = position.x as u16;
         let y = position.y as u16;
         self.devices.mouse_device.notify_cursor_position(&[x, y]);
+
+        let mouse_vector = self.devices.mouse_device.read_vector();
+        let res = self.uxn.run(mouse_vector, construct_device_list(&mut self.devices));
+
+        match res {
+            Ok(UxnStatus::Terminate) => {
+                // gracefully close
+                helper.terminate_loop();
+            },
+            Ok(UxnStatus::Halt) => {
+                // continue rendering the screen
+            },
+            Err(e) => {
+                println!("{}", e);
+                helper.terminate_loop();
+            },
+        }
     }
 }
 
