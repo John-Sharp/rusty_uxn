@@ -11,7 +11,8 @@ use std::time::Duration;
 use crate::uxninterface::UxnStatus;
 
 use speedy2d::Window;
-use speedy2d::window::{WindowHandler, WindowHelper, WindowStartupInfo, WindowCreationOptions, WindowSize};
+use speedy2d::window::{WindowHandler, WindowHelper, WindowStartupInfo, WindowCreationOptions, WindowSize,
+    MouseButton};
 use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 use speedy2d::dimen::Vector2;
@@ -20,6 +21,7 @@ use speedy2d::image::{ImageDataType, ImageSmoothingMode};
 use crate::ops::OpObjectFactory;
 use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice, screen::ScreenDevice,
     mouse::MouseDevice};
+use crate::emulators::devices::mouse;
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
@@ -159,6 +161,49 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
 
         let mouse_vector = self.devices.mouse_device.read_vector();
         self.execute_vector(mouse_vector, helper);
+    }
+
+    fn on_mouse_button_down(
+        &mut self,
+        helper: &mut WindowHelper<UxnEvent>,
+        button: MouseButton
+    ) {
+        let button = if let Some(button) = convert_button_to_device_button(button) {
+            button
+        } else {
+            return;
+        };
+
+        self.devices.mouse_device.notify_button_down(button);
+
+        let mouse_vector = self.devices.mouse_device.read_vector();
+        self.execute_vector(mouse_vector, helper);
+    }
+
+    fn on_mouse_button_up(
+        &mut self,
+        helper: &mut WindowHelper<UxnEvent>,
+        button: MouseButton
+    ) {
+        let button = if let Some(button) = convert_button_to_device_button(button) {
+            button
+        } else {
+            return;
+        };
+
+        self.devices.mouse_device.notify_button_up(button);
+
+        let mouse_vector = self.devices.mouse_device.read_vector();
+        self.execute_vector(mouse_vector, helper);
+    }
+}
+
+fn convert_button_to_device_button(button: MouseButton) -> Option<mouse::Button> {
+    match button {
+        MouseButton::Left => Some(mouse::Button::Left),
+        MouseButton::Right => Some(mouse::Button::Right),
+        MouseButton::Middle => Some(mouse::Button::Middle),
+        _ => None,
     }
 }
 

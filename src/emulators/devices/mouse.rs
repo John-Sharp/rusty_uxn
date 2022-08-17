@@ -7,6 +7,12 @@ pub struct MouseDevice {
     click_state: u8,
 }
 
+pub enum Button {
+    Left,
+    Middle,
+    Right,
+}
+
 impl MouseDevice {
     pub fn new() -> Self {
         MouseDevice{
@@ -24,6 +30,26 @@ impl MouseDevice {
     pub fn notify_cursor_position(&mut self, cursor_pos: &[u16; 2]) {
         self.cursor_pos[0] = cursor_pos[0].to_be_bytes();
         self.cursor_pos[1] = cursor_pos[1].to_be_bytes();
+    }
+
+    pub fn notify_button_down(&mut self, button: Button) {
+        let mask = match button {
+            Button::Left => 1,
+            Button::Middle => 1 << 1,
+            Button::Right => 1 << 2,
+        };
+
+        self.click_state |= mask;
+    }
+
+    pub fn notify_button_up(&mut self, button: Button) {
+        let mask = match button {
+            Button::Left => 1,
+            Button::Middle => 1 << 1,
+            Button::Right => 1 << 2,
+        };
+
+        self.click_state &= !mask;
     }
 }
 
@@ -112,5 +138,18 @@ mod tests {
 
         assert_eq!(mouse_device.read(0x4), 0xff);
         assert_eq!(mouse_device.read(0x5), 0xff);
+    }
+
+    #[test]
+    fn test_set_get_click_state() {
+        let mut mouse_device = MouseDevice::new();
+
+        mouse_device.notify_button_down(Button::Left);
+        mouse_device.notify_button_down(Button::Right);
+
+        assert_eq!(mouse_device.read(0x6), 1 | (1<<2));
+
+        mouse_device.notify_button_up(Button::Right);
+        assert_eq!(mouse_device.read(0x6), 1);
     }
 }
