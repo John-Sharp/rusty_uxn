@@ -51,6 +51,11 @@ impl MouseDevice {
 
         self.click_state &= !mask;
     }
+
+    pub fn notify_scroll(&mut self, distance: &[i16; 2]) {
+        self.scroll[0] = distance[0].to_be_bytes();
+        self.scroll[1] = distance[1].to_be_bytes();
+    }
 }
 
 impl Device for MouseDevice {
@@ -151,5 +156,18 @@ mod tests {
 
         mouse_device.notify_button_up(Button::Right);
         assert_eq!(mouse_device.read(0x6), 1);
+    }
+
+    #[test]
+    fn test_set_get_scroll() {
+        let mut mouse_device = MouseDevice::new();
+
+        mouse_device.notify_scroll(&[2, -1]);
+
+        assert_eq!(mouse_device.read(0xa), 0x00);
+        assert_eq!(mouse_device.read(0xb), 0x02);
+
+        assert_eq!(mouse_device.read(0xc), 0xff);
+        assert_eq!(mouse_device.read(0xd), 0xff);
     }
 }

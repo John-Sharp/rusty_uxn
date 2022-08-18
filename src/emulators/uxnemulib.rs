@@ -12,7 +12,7 @@ use crate::uxninterface::UxnStatus;
 
 use speedy2d::Window;
 use speedy2d::window::{WindowHandler, WindowHelper, WindowStartupInfo, WindowCreationOptions, WindowSize,
-    MouseButton};
+    MouseButton, MouseScrollDistance};
 use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 use speedy2d::dimen::Vector2;
@@ -195,6 +195,21 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
 
         let mouse_vector = self.devices.mouse_device.read_vector();
         self.execute_vector(mouse_vector, helper);
+    }
+
+    fn on_mouse_wheel_scroll(
+        &mut self,
+        helper: &mut WindowHelper<UxnEvent>,
+        distance: MouseScrollDistance
+    ) {
+        let (x, y) = match distance {
+            MouseScrollDistance::Lines{x, y, ..} => (x, y),
+            _ => { return; }
+        };
+
+        // casting down from f64 to i16 could lead to overflow, but in practise
+        // the numbers for mouse scroll distance are small
+        self.devices.mouse_device.notify_scroll(&[x as i16, y as i16])
     }
 }
 
