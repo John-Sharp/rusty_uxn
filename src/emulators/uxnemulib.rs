@@ -38,6 +38,10 @@ pub struct Cli {
     /// Rom to run
     #[clap(parse(from_os_str))]
     pub rom: std::path::PathBuf,
+
+    /// Initial console input for uxn virtual machine
+    #[clap(default_value_t = String::from(""))]
+    pub input: String,
 }
 
 pub struct Config<J: Write> {
@@ -168,8 +172,6 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
 
     fn on_start(&mut self, helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
         helper.set_cursor_visible(false);
-
-        self.execute_vector(uxn::INIT_VECTOR, helper);
     }
 
     fn on_user_event(
@@ -322,7 +324,7 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     let rom = rom.map(|b| b.unwrap());
     let instruction_factory_impl = OpObjectFactory{};
 
-    let uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
+    let mut uxn = uxn::UxnImpl::new(rom, instruction_factory_impl)?;
 
     let console_device = Console::new(io::stdout(), io::stderr());
 
@@ -331,7 +333,7 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     let screen_device = ScreenDevice::new(&INITIAL_DIMENSIONS);
     let mouse_device = MouseDevice::new();
     let controller_device = ControllerDevice::new();
-    let emu_devices = EmuDevices{
+    let mut emu_devices = EmuDevices{
         console_device, file_device, datetime_device, debug_writer: other_config.stderr_writer,
         screen_device, mouse_device, controller_device};
 
@@ -342,11 +344,42 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
         "Title",
         window_creation_options).unwrap();
 
+    let res = uxn.run(uxn::INIT_VECTOR, construct_device_list(&mut emu_devices))?;
+    match res {
+        UxnStatus::Terminate => {
+            return Ok(());
+        },
+        UxnStatus::Halt => {},
+    }
+
+    // for input given on command line
+    for c in cli_config.input.bytes() {
+        emu_devices.console_device.provide_input(c);
+        let console_vector = emu_devices.console_device.read_vector();
+        let res = uxn.run(console_vector, construct_device_list(&mut emu_devices))?;
+
+        match res {
+            UxnStatus::Terminate => { return Ok(()); },
+            UxnStatus::Halt => {},
+        }
+    }
+
     let window_refresh_event_sender = window.create_user_event_sender();
     thread::spawn(move || {
         loop {
             thread::sleep(Duration::from_millis(17));
             window_refresh_event_sender.send_event(UxnEvent::ScreenRefresh).unwrap();
+        }
+    });
+
+    thread::spawn(move || {
+        for c in io::stdin().bytes() {
+            match c {
+                Ok(c) => {
+                    println!("got a {} on stdin", c as char);
+                },
+                _ => {}
+            }
         }
     });
 

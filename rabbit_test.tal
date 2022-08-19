@@ -25,6 +25,8 @@
 
 ;controller-handler .Controller/vector DEO2
 
+;console-handler .Console/vector DEO2
+
 #0000 #0100 ;paint-rabbit JSR2
 
 #0100 #0100 ;paint-rabbit JSR2
@@ -58,6 +60,12 @@ BRK
     .Controller/button DEI2
     DEBUG
     POP2
+BRK
+
+@console-handler
+    .Console/read DEI
+    DEBUG
+    POP
 BRK
 
 @on-mouse-down
