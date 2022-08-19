@@ -96,3 +96,66 @@ impl Device for ControllerDevice {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::emulators::uxn::device::MainRamInterfaceError;
+
+    struct MockMainRamInterface {}
+    impl MainRamInterface for MockMainRamInterface {
+        fn read(&self, _address: u16, _num_bytes: u16) -> Result<Vec<u8>, MainRamInterfaceError> {
+            panic!("should not be called");
+        }
+
+        fn write(&mut self, _address: u16, _bytes: &[u8]) -> Result<usize, MainRamInterfaceError> {
+            panic!("should not be called");
+        }
+    }
+
+    #[test]
+    fn test_set_get_vector() {
+        let mut controller_device = ControllerDevice::new();
+
+        let initial_vector = controller_device.read_vector();
+        assert_eq!(initial_vector, 0);
+
+        controller_device.write(0x0, 0xab, &mut MockMainRamInterface{});
+        controller_device.write(0x1, 0xcd, &mut MockMainRamInterface{});
+
+        let vector = controller_device.read_vector();
+        assert_eq!(vector, 0xabcd);
+
+        assert_eq!(controller_device.read(0x0), 0xab);
+        assert_eq!(controller_device.read(0x1), 0xcd);
+    }
+
+    #[test]
+    fn test_set_get_button_state() {
+        let mut controller_device = ControllerDevice::new();
+
+        let changed = controller_device.notify_button_down(Button::Select);
+        assert_eq!(changed, true);
+        let changed = controller_device.notify_button_down(Button::Down);
+        assert_eq!(changed, true);
+
+        assert_eq!(controller_device.read(0x2), (1<<2) | (1<<5));
+
+        let changed = controller_device.notify_button_down(Button::Down);
+        assert_eq!(changed, false);
+
+        controller_device.notify_button_up(Button::Down);
+        assert_eq!(controller_device.read(0x2), (1<<2));
+    }
+
+    #[test]
+    fn test_set_get_key() {
+        let mut controller_device = ControllerDevice::new();
+
+        controller_device.notify_key_press('h' as u8);
+        assert_eq!(controller_device.read(0x3), 'h' as u8);
+
+        controller_device.notify_key_press('e' as u8);
+        assert_eq!(controller_device.read(0x3), 'e' as u8);
+    }
+}
