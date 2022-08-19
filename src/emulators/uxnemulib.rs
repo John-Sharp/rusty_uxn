@@ -86,6 +86,7 @@ fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut EmuDevices<
 
 enum UxnEvent {
     ScreenRefresh,
+    ConsoleInputEvent(u8),
 }
 
 struct MyWindowHandler<J: instruction::InstructionFactory, K: Write, L: Write, M: Write> {
@@ -184,6 +185,11 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
                 if self.devices.screen_device.get_draw_required(&self.uxn) {
                     helper.request_redraw();
                 }
+            },
+            UxnEvent::ConsoleInputEvent(c) => {
+                self.devices.console_device.provide_input(c);
+                let console_vector = self.devices.console_device.read_vector();
+                self.execute_vector(console_vector, helper);
             },
         }
     }
@@ -372,11 +378,12 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
         }
     });
 
+    let window_console_in_event_sender = window.create_user_event_sender();
     thread::spawn(move || {
         for c in io::stdin().bytes() {
             match c {
                 Ok(c) => {
-                    println!("got a {} on stdin", c as char);
+                    window_console_in_event_sender.send_event(UxnEvent::ConsoleInputEvent(c)).unwrap();
                 },
                 _ => {}
             }
