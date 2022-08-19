@@ -1,6 +1,6 @@
 use crate::emulators::uxn::device::{Device, MainRamInterface};
 
-enum Button {
+pub enum Button {
     A,
     B,
     Select,
@@ -9,6 +9,21 @@ enum Button {
     Down,
     Left,
     Right,
+}
+
+impl Button {
+    fn to_code(&self) -> u8 {
+        match self {
+            Button::A => 1,
+            Button::B => 1<<1,
+            Button::Select => 1<<2,
+            Button::Start => 1<<3,
+            Button::Up => 1<<4,
+            Button::Down => 1<<5,
+            Button::Left => 1<<6,
+            Button::Right => 1<<7,
+        }
+    }
 }
 
 pub struct ControllerDevice {
@@ -32,6 +47,19 @@ impl ControllerDevice {
 
     pub fn notify_key_press(&mut self, key: u8) {
         self.key = key;
+    }
+
+    pub fn notify_button_down(&mut self, button: Button) -> bool {
+        let button_old = self.button_state;
+        self.button_state |= button.to_code();
+        if button_old != self.button_state {
+            return true;
+        }
+        return false;
+    }
+
+    pub fn notify_button_up(&mut self, button: Button) {
+        self.button_state &= !button.to_code();
     }
 }
 

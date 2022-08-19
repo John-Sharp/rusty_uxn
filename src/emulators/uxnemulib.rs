@@ -12,7 +12,7 @@ use crate::uxninterface::UxnStatus;
 
 use speedy2d::Window;
 use speedy2d::window::{WindowHandler, WindowHelper, WindowStartupInfo, WindowCreationOptions, WindowSize,
-    MouseButton, MouseScrollDistance};
+    MouseButton, MouseScrollDistance, VirtualKeyCode, KeyScancode};
 use speedy2d::Graphics2D;
 use speedy2d::color::Color;
 use speedy2d::dimen::Vector2;
@@ -21,7 +21,7 @@ use speedy2d::image::{ImageDataType, ImageSmoothingMode};
 use crate::ops::OpObjectFactory;
 use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice, screen::ScreenDevice,
     mouse::MouseDevice, controller::ControllerDevice};
-use crate::emulators::devices::mouse;
+use crate::emulators::devices::{mouse, controller};
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
@@ -106,6 +106,40 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write> MyWindowH
                 println!("{}", e);
                 helper.terminate_loop();
             },
+        }
+    }
+
+    fn on_key_press_change(
+        &mut self, 
+        helper: &mut WindowHelper<UxnEvent>,
+        virtual_key_code: Option<VirtualKeyCode>,
+        down: bool
+    ) {
+        let virtual_key_code = if let Some(v) = virtual_key_code {
+            v
+        } else {
+            return;
+        };
+
+        let button = convert_key_to_controller_button(virtual_key_code);
+
+        let button = if let Some(b) = button {
+            b
+        } else {
+            return;
+        };
+
+        let mut trigger_vector = true;
+
+        if down {
+            trigger_vector = self.devices.controller_device.notify_button_down(button);
+        } else {
+            self.devices.controller_device.notify_button_up(button);
+        }
+
+        if trigger_vector {
+            let controller_vector = self.devices.controller_device.read_vector();
+            self.execute_vector(controller_vector, helper);
         }
     }
 }
@@ -222,12 +256,30 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
         helper: &mut WindowHelper<UxnEvent>,
         unicode_codepoint: char
     ) {
-        if (unicode_codepoint.is_ascii()) {
+        if unicode_codepoint.is_ascii() {
             self.devices.controller_device.notify_key_press(unicode_codepoint as u8);
         }
 
         let controller_vector = self.devices.controller_device.read_vector();
         self.execute_vector(controller_vector, helper);
+    }
+
+    fn on_key_down(
+        &mut self,
+        helper: &mut WindowHelper<UxnEvent>,
+        virtual_key_code: Option<VirtualKeyCode>,
+        _scancode: KeyScancode
+    ) {
+        self.on_key_press_change(helper, virtual_key_code, true);
+    }
+
+    fn on_key_up(
+        &mut self,
+        helper: &mut WindowHelper<UxnEvent>,
+        virtual_key_code: Option<VirtualKeyCode>,
+        _scancode: KeyScancode
+    ) {
+        self.on_key_press_change(helper, virtual_key_code, false);
     }
 }
 
@@ -236,6 +288,23 @@ fn convert_button_to_device_button(button: MouseButton) -> Option<mouse::Button>
         MouseButton::Left => Some(mouse::Button::Left),
         MouseButton::Right => Some(mouse::Button::Right),
         MouseButton::Middle => Some(mouse::Button::Middle),
+        _ => None,
+    }
+}
+
+fn convert_key_to_controller_button(key_code: VirtualKeyCode) -> Option<controller::Button> {
+    match key_code {
+        VirtualKeyCode::LControl => Some(controller::Button::A),
+        VirtualKeyCode::RControl => Some(controller::Button::A),
+        VirtualKeyCode::LAlt => Some(controller::Button::B),
+        VirtualKeyCode::RAlt => Some(controller::Button::B),
+        VirtualKeyCode::LShift => Some(controller::Button::Select),
+        VirtualKeyCode::RShift => Some(controller::Button::Select),
+        VirtualKeyCode::Home => Some(controller::Button::Start),
+        VirtualKeyCode::Up => Some(controller::Button::Up),
+        VirtualKeyCode::Down => Some(controller::Button::Down),
+        VirtualKeyCode::Left => Some(controller::Button::Left),
+        VirtualKeyCode::Right => Some(controller::Button::Right),
         _ => None,
     }
 }

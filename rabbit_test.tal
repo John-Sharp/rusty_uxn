@@ -55,7 +55,7 @@ BRK
 BRK
 
 @controller-handler
-    .Controller/key DEI2
+    .Controller/button DEI2
     DEBUG
     POP2
 BRK
