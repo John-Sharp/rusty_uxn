@@ -20,7 +20,7 @@ use speedy2d::image::{ImageDataType, ImageSmoothingMode};
 
 use crate::ops::OpObjectFactory;
 use crate::emulators::devices::{console::Console, file::FileDevice, datetime::DateTimeDevice, screen::ScreenDevice,
-    mouse::MouseDevice};
+    mouse::MouseDevice, controller::ControllerDevice};
 use crate::emulators::devices::mouse;
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
@@ -64,6 +64,7 @@ struct EmuDevices<J: Write, K: Write, M: Write> {
     debug_writer: M,
     screen_device: ScreenDevice,
     mouse_device: MouseDevice,
+    controller_device: ControllerDevice,
 }
 
 fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut EmuDevices<J, K, M>) -> DeviceListImpl<'_, &mut M> {
@@ -71,6 +72,7 @@ fn construct_device_list<J: Write, K: Write, M: Write>(devices: &mut EmuDevices<
     device_list.insert(0x0, DeviceEntry::SystemPlaceHolder(&mut devices.debug_writer));
     device_list.insert(0x1, DeviceEntry::Device(&mut devices.console_device));
     device_list.insert(0x2, DeviceEntry::Device(&mut devices.screen_device));
+    device_list.insert(0x8, DeviceEntry::Device(&mut devices.controller_device));
     device_list.insert(0x9, DeviceEntry::Device(&mut devices.mouse_device));
     device_list.insert(0xa, DeviceEntry::Device(&mut devices.file_device));
     device_list.insert(0xc, DeviceEntry::Device(&mut devices.datetime_device));
@@ -209,7 +211,23 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
 
         // casting down from f64 to i16 could lead to overflow, but in practise
         // the numbers for mouse scroll distance are small
-        self.devices.mouse_device.notify_scroll(&[x as i16, y as i16])
+        self.devices.mouse_device.notify_scroll(&[x as i16, y as i16]);
+
+        let mouse_vector = self.devices.mouse_device.read_vector();
+        self.execute_vector(mouse_vector, helper);
+    }
+
+    fn on_keyboard_char(
+        &mut self,
+        helper: &mut WindowHelper<UxnEvent>,
+        unicode_codepoint: char
+    ) {
+        if (unicode_codepoint.is_ascii()) {
+            self.devices.controller_device.notify_key_press(unicode_codepoint as u8);
+        }
+
+        let controller_vector = self.devices.controller_device.read_vector();
+        self.execute_vector(controller_vector, helper);
     }
 }
 
@@ -243,9 +261,10 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     let datetime_device = DateTimeDevice::new();
     let screen_device = ScreenDevice::new(&INITIAL_DIMENSIONS);
     let mouse_device = MouseDevice::new();
+    let controller_device = ControllerDevice::new();
     let emu_devices = EmuDevices{
         console_device, file_device, datetime_device, debug_writer: other_config.stderr_writer,
-        screen_device, mouse_device};
+        screen_device, mouse_device, controller_device};
 
     let window_creation_options = WindowCreationOptions::new_windowed(WindowSize::PhysicalPixels(Vector2::new(INITIAL_DIMENSIONS[0].into(), INITIAL_DIMENSIONS[1].into())), None);
     let window_creation_options = window_creation_options.with_resizable(false);

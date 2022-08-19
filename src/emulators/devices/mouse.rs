@@ -15,7 +15,7 @@ pub enum Button {
 
 impl MouseDevice {
     pub fn new() -> Self {
-        MouseDevice{
+        MouseDevice {
             vector: [0; 2],
             cursor_pos: [[0; 2]; 2],
             scroll: [[0; 2]; 2],

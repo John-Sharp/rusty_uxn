@@ -7,6 +7,7 @@
 |00 @System     [ &vector $2 &wst      $1 &rst    $1 &pad   $4 &r      $2 &g      $2 &b    $2 &debug  $1 &halt $1 ]
 |10 @Console    [ &vector $2 &read     $1 &pad    $5 &write $1 &error  $1 ]
 |20 @Screen     [ &vector $2 &width $2 &height $2 &auto $1 &pad $1 &x $2 &y $2 &addr $2 &pixel  $1 &sprite $1 ]
+|80 @Controller [ &vector $2 &button   $1 &key    $1 ]
 |90 @Mouse      [ &vector $2 &x        $2 &y      $2 &state $1 &pad    $3 &scrollx $2 &scrolly $2 ] 
 
 
@@ -22,7 +23,7 @@
 
 ;mouse-handler .Mouse/vector DEO2
 
-
+;controller-handler .Controller/vector DEO2
 
 #0000 #0100 ;paint-rabbit JSR2
 
@@ -51,6 +52,12 @@ BRK
     
     .Mouse/state DEI #01 EQU ,on-mouse-down JCN
 
+BRK
+
+@controller-handler
+    .Controller/key DEI2
+    DEBUG
+    POP2
 BRK
 
 @on-mouse-down

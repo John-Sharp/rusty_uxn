@@ -7,3 +7,4 @@ pub mod datetime;
 
 pub mod screen;
 pub mod mouse;
+pub mod controller;
