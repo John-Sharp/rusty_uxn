@@ -7,14 +7,13 @@ fn do_signed_jump(wrapper: &mut UxnWrapper, dst: i8) -> Result<u16, UxnError> {
 
     let dst = i32::from(current_pc) + i32::from(dst);
 
-    let new_pc = if let Ok(dst) = u16::try_from(dst) {
+    if let Ok(dst) = u16::try_from(dst) {
         wrapper.uxn.set_program_counter(dst);
-        dst
     } else {
         return Err(UxnError::OutOfRangeMemoryAddress);
     };
 
-    return Ok(new_pc);
+    return Ok(current_pc);
 }
 
 // jump handler: moves the program counter by a signed value equal to the byte on the top of the stack, or an absolute address in short mode
@@ -274,12 +273,12 @@ mod tests {
                                        // so program counter should be set to 0xaa23-0x11=0xaa12
         );
 
-        // the program counter should also have been pushed to the return stack (broken into bytes)
+        // the old program counter should also have been pushed to the return stack (broken into bytes)
         assert_eq!(
             mock_uxn
                 .push_to_return_stack_arguments_received
                 .into_inner(),
-            VecDeque::from([(0xaa,), (0x12,)])
+            VecDeque::from([(0xaa,), (0x23,)])
         );
     }
 
