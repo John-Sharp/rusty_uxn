@@ -430,17 +430,17 @@ fn strip_comments<I>(input: I) -> impl Iterator<Item = String>
 where
     I: Iterator<Item = String>,
 {
-    let mut in_comment = false;
+    let mut brack_stack = vec!{};
     let x = input.filter_map(move |s| {
         if s == "(" {
-            in_comment = true;
+            brack_stack.push(true);
             return None;
         }
-        let was_in_comment = in_comment;
         if s == ")" {
-            in_comment = false;
+            brack_stack.pop();
+            return None;
         }
-        if was_in_comment {
+        if brack_stack.len() > 0 {
             return None;
         }
         if s == "[" {
