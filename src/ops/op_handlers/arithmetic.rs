@@ -36,15 +36,15 @@ pub fn sub_handler(
     let mut wrapper = UxnWrapper::new(u, keep, ret);
 
     if short == true {
-        let a = wrapper.pop_short()?;
-        let b = wrapper.pop_short()?;
+        let a = wrapper.pop_short()? as i32;
+        let b = wrapper.pop_short()? as i32;
 
-        wrapper.push_short(b-a)?;
+        wrapper.push_short((b-a) as u16)?;
     } else {
-        let a = wrapper.pop()?;
-        let b = wrapper.pop()?;
+        let a = wrapper.pop()? as i16;
+        let b = wrapper.pop()? as i16;
 
-        wrapper.push(b-a)?;
+        wrapper.push((b-a) as u8)?;
     }
 
     return Ok(());
