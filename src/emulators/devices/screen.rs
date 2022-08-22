@@ -56,12 +56,12 @@ impl Layer {
 }
 
 pub struct ScreenDevice {
+    vector: [u8; 2],
     layers: [Layer; 2],
     pixels: Vec<u8>,
     dim: [[u8; 2]; 2],
     auto_byte: u8,
     changed: bool,
-    vector: [u8; 2],
     target_location: [[u8; 2]; 2],
     sprite_address: [u8; 2],
     last_pixel_value: u8,
@@ -82,12 +82,12 @@ const SPRITE_SIZE_1BPP: u16 = 8;
 impl ScreenDevice {
     pub fn new(dimensions: &[u16; 2]) -> Self {
         ScreenDevice {
+            vector: [0; 2],
             layers: [Layer::new(dimensions), Layer::new(dimensions)],
             pixels: vec![0; usize::from(dimensions[0]) * usize::from(dimensions[1]) * 3],
             dim: [dimensions[0].to_be_bytes(), dimensions[1].to_be_bytes()],
             auto_byte: 0,
             changed: true,
-            vector: [0; 2],
             target_location: [[0; 2], [0; 2]],
             sprite_address: [0; 2],
             last_pixel_value: 0,
@@ -104,6 +104,10 @@ impl ScreenDevice {
             auto_inc_x: false,
             auto_inc_y: false,
         }
+    }
+
+    pub fn read_vector(&self) -> u16 {
+        return u16::from_be_bytes(self.vector);
     }
 
     fn pixel_write(&mut self, val: u8) {

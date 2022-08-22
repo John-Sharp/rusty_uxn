@@ -185,6 +185,9 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
                 if self.devices.screen_device.get_draw_required(&self.uxn) {
                     helper.request_redraw();
                 }
+
+                let screen_vector = self.devices.screen_device.read_vector();
+                self.execute_vector(screen_vector, helper);
             },
             UxnEvent::ConsoleInputEvent(c) => {
                 self.devices.console_device.provide_input(c);
