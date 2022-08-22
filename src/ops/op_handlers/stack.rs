@@ -37,12 +37,12 @@ pub fn inc_handler(
 
     if short == false {
         let val = wrapper.pop()?;
-        let val = val + 1;
+        let val = (val as u16 + 1) as u8;
         wrapper.push(val)?;
     } else {
         let val_b1 = wrapper.pop()?;
         let val_b2 = wrapper.pop()?;
-        let val = u16::from_be_bytes([val_b2, val_b1]) + 1;
+        let val = (u16::from_be_bytes([val_b2, val_b1]) as u32 + 1) as u16;
         let [val_b2, val_b1] = val.to_be_bytes();
         wrapper.push(val_b2)?;
         wrapper.push(val_b1)?;
