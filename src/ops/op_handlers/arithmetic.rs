@@ -50,7 +50,6 @@ pub fn sub_handler(
     return Ok(());
 }
 
-// TODO check for overflow in a nicer way
 // multiply handler: pushes the product of the first and second values at the top of the stack
 pub fn mul_handler(
     u: Box<&mut dyn UxnWithDevices>,
@@ -64,12 +63,12 @@ pub fn mul_handler(
         let a = wrapper.pop_short()?;
         let b = wrapper.pop_short()?;
 
-        wrapper.push_short(b*a)?;
+        wrapper.push_short(a.wrapping_mul(b))?;
     } else {
         let a = wrapper.pop()?;
         let b = wrapper.pop()?;
 
-        wrapper.push(b*a)?;
+        wrapper.push(a.wrapping_mul(b))?;
     }
 
     return Ok(());
