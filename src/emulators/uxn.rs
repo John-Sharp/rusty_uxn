@@ -218,6 +218,12 @@ J: InstructionFactory,
     // at end of run the object goes out of scope
     pub fn run<K: DeviceList>(&mut self, vector: u16, devices: K) -> Result<UxnStatus, UxnError>
     {
+        // vector of zero means that nothing should be done (it is what devices have as their
+        // vectors when they are unset)
+        if vector == 0 {
+            return Ok(UxnStatus::Halt);
+        }
+
         self.set_program_counter(vector);
 
         let mut uxn_with_devices = UxnWithDevicesImpl {
