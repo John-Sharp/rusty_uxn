@@ -43,7 +43,7 @@ struct OpDescription {
     op_code: OpCode,
     byte: u8,
     token: &'static str,
-    handler: fn(Box<&mut dyn UxnWithDevices>, bool, bool, bool) -> Result<(), UxnError>,
+    handler: fn(&mut dyn UxnWithDevices, bool, bool, bool) -> Result<(), UxnError>,
 }
 
 mod op_handlers;
@@ -104,7 +104,7 @@ pub struct OpObject {
 }
 
 impl Instruction for OpObject {
-    fn execute(&self, uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError> {
+    fn execute(&self, uxn: &mut dyn UxnWithDevices) -> Result<(), UxnError> {
         (OP_LIST[self.handler_index].handler)(uxn, self.keep, self.short, self.ret)
     }
 }

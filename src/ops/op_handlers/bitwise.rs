@@ -4,7 +4,7 @@ use super::UxnError;
 
 // and handler: pushes the result of the bitwise operation AND, to the top of the stack
 pub fn and_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -30,7 +30,7 @@ pub fn and_handler(
 
 // or handler: pushes the result of the bitwise operation OR, to the top of the stack
 pub fn ora_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -56,7 +56,7 @@ pub fn ora_handler(
 
 // exclusive or handler: pushes the result of the bitwise operation XOR, to the top of the stack
 pub fn eor_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -82,7 +82,7 @@ pub fn eor_handler(
 
 // shift handler: pushes the result of the bitwise operation XOR, to the top of the stack
 pub fn sft_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,

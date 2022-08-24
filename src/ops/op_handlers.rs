@@ -2,7 +2,7 @@ use crate::uxninterface::UxnWithDevices;
 use crate::uxninterface::UxnError;
 
 struct UxnWrapper<'a> {
-    uxn: Box<&'a mut dyn UxnWithDevices>,
+    uxn: &'a mut dyn UxnWithDevices,
     push_fn: fn(&mut (dyn UxnWithDevices + 'a), u8) -> Result<(), UxnError>,
     push_ret_fn: fn(&mut (dyn UxnWithDevices + 'a), u8) -> Result<(), UxnError>,
     pop_fn: fn(&mut (dyn UxnWithDevices + 'a)) -> Result<u8, UxnError>,
@@ -11,7 +11,7 @@ struct UxnWrapper<'a> {
 }
 
 impl<'a> UxnWrapper<'a> {
-    fn new(uxn: Box<&'a mut dyn UxnWithDevices>, keep: bool, ret: bool) -> Self {
+    fn new(uxn: &'a mut dyn UxnWithDevices, keep: bool, ret: bool) -> Self {
         let push_fn = if ret == false {
             <dyn UxnWithDevices>::push_to_working_stack
         } else {
@@ -55,18 +55,18 @@ impl<'a> UxnWrapper<'a> {
         // state prior to any pops before pushing the desired
         // value
         while let Some(val) = self.popped_values.pop() {
-            (self.push_fn)(*self.uxn, val).expect("Couldn't push");
+            (self.push_fn)(self.uxn, val).expect("Couldn't push");
         }
 
-        (self.push_fn)(*self.uxn, byte)
+        (self.push_fn)(self.uxn, byte)
     }
 
     fn push_to_return_stack(&mut self, byte: u8) -> Result<(), UxnError> {
-        (self.push_ret_fn)(*self.uxn, byte)
+        (self.push_ret_fn)(self.uxn, byte)
     }
 
     fn pop(&mut self) -> Result<u8, UxnError> {
-        let popped = (self.pop_fn)(*self.uxn)?;
+        let popped = (self.pop_fn)(self.uxn)?;
 
         if self.keep {
             self.popped_values.push(popped);
@@ -102,7 +102,7 @@ impl<'a> Drop for UxnWrapper<'a> {
         // what has been popped in the course of this operation.
         // Push these back onto the stack to ensure they are kept
         while let Some(val) = self.popped_values.pop() {
-            (self.push_fn)(*self.uxn, val).expect("Couldn't push");
+            (self.push_fn)(self.uxn, val).expect("Couldn't push");
         }
     }
 }

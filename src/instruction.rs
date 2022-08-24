@@ -6,5 +6,5 @@ pub trait InstructionFactory {
 }
 
 pub trait Instruction {
-    fn execute(&self, uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError>;
+    fn execute(&self, uxn: &mut dyn UxnWithDevices) -> Result<(), UxnError>;
 }

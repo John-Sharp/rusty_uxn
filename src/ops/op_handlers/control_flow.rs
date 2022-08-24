@@ -18,7 +18,7 @@ fn do_signed_jump(wrapper: &mut UxnWrapper, dst: i8) -> Result<u16, UxnError> {
 
 // jump handler: moves the program counter by a signed value equal to the byte on the top of the stack, or an absolute address in short mode
 pub fn jmp_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -39,7 +39,7 @@ pub fn jmp_handler(
 
 // jump conditional handler: if the byte preceeding the address is not 00, moves the program counter by a signed value equal to the byte on the top of the stack, or an absolute address in short mode
 pub fn jcn_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -68,7 +68,7 @@ pub fn jcn_handler(
 
 // jump stash return handler: pushes the value of the program counter to the return-stack and moves the program counter by a signed value equal to the byte on the top of the stack, or an absolute address in short mode
 pub fn jsr_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -98,7 +98,7 @@ pub fn jsr_handler(
 
 // stash handler: moves the value at the top of the stack, to the return stack
 pub fn sth_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,

@@ -4,7 +4,7 @@ use super::UxnError;
 
 // literal handler: pushes the next value seen in the program onto the stack
 pub fn lit_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -28,7 +28,7 @@ pub fn lit_handler(
 
 // increment handler: adds 1 to value at top of stack
 pub fn inc_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -53,7 +53,7 @@ pub fn inc_handler(
 
 // pop handler: removes the value at the top of the stack
 pub fn pop_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -75,7 +75,7 @@ pub fn pop_handler(
 
 // duplicate handler: duplicates the value at the top of the stack
 pub fn dup_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -102,7 +102,7 @@ pub fn dup_handler(
 
 //nip handler: removes the second value from the stack
 pub fn nip_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -130,7 +130,7 @@ pub fn nip_handler(
 
 // swap handler: exchanges the first and second values at the top of the stack
 pub fn swp_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -162,7 +162,7 @@ pub fn swp_handler(
 
 // over handler: duplicates the second value at the top of the stack
 pub fn ovr_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -198,7 +198,7 @@ pub fn ovr_handler(
 
 // rotate handler: rotates three values at the top of the stack, to the left, wrapping
 pub fn rot_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,

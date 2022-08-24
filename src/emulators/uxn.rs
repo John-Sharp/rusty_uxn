@@ -246,8 +246,7 @@ J: InstructionFactory,
             let op = uxn_with_devices.uxn.instruction_factory.from_byte(instr);
 
             // call its handler
-            // TODO I don't think I need a box around this
-            op.execute(Box::new(&mut uxn_with_devices))?;
+            op.execute(&mut uxn_with_devices)?;
 
             if uxn_with_devices.uxn.should_terminate {
                 return Ok(UxnStatus::Terminate);

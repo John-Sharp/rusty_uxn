@@ -4,7 +4,7 @@ use super::UxnError;
 
 // equal handler: pushes 01 to the stack if the two values at the top of the stack are equal, 00 otherwise
 pub fn equ_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -36,7 +36,7 @@ pub fn equ_handler(
 
 // not equal handler: pushes 01 to the stack if the two values at the top of the stack are not equal, 00 otherwise
 pub fn neq_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -68,7 +68,7 @@ pub fn neq_handler(
 
 // greater than handler: pushes 01 to the stack if the second value at the top of the stack is greater than the value at the top of the stack, 00 otherwise
 pub fn gth_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
@@ -100,7 +100,7 @@ pub fn gth_handler(
 
 // lesser than handler: pushes 01 to the stack if the second value at the top of the stack is lesser than the value at the top of the stack, 00 otherwise
 pub fn lth_handler(
-    u: Box<&mut dyn UxnWithDevices>,
+    u: &mut dyn UxnWithDevices,
     keep: bool,
     short: bool,
     ret: bool,
