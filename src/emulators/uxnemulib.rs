@@ -29,6 +29,10 @@ use std::io::Write;
 use crate::instruction;
 use crate::emulators::uxn;
 
+#[cfg(debug_assertions)]
+use std::time::Instant;
+#[cfg(debug_assertions)]
+use std::default::Default;
 
 const INITIAL_DIMENSIONS: [u16; 2] = [64*8, 40*8];
 
@@ -92,6 +96,23 @@ enum UxnEvent {
 struct MyWindowHandler<J: instruction::InstructionFactory, K: Write, L: Write, M: Write> {
     uxn: uxn::UxnImpl<J>,
     devices: EmuDevices<K, L, M>,
+    pending_draw: bool,
+
+
+    #[cfg(debug_assertions)]
+    draw_calls: u64,
+    #[cfg(debug_assertions)]
+    draw_time: Duration,
+
+    #[cfg(debug_assertions)]
+    construct_device_list_calls: u64,
+    #[cfg(debug_assertions)]
+    construct_device_list_time: Duration,
+
+    #[cfg(debug_assertions)]
+    execute_vector_calls:u64,
+    #[cfg(debug_assertions)]
+    execute_vector_time: Duration,
 }
 
 
@@ -168,7 +189,24 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
             graphics.draw_image((0.0, 0.0), &image_handle);
         };
 
+
+        #[cfg(debug_assertions)]
+        let now = Instant::now();
+
         self.devices.screen_device.draw(&mut draw_fn);
+
+        #[cfg(debug_assertions)]
+        {
+            self.draw_time += now.elapsed();
+            self.draw_calls += 1;
+            if self.draw_calls == 100 {
+                println!("draw time: {:?}", self.draw_time);
+                self.draw_time = Default::default();
+                self.draw_calls = 0;
+            }
+        }
+
+        self.pending_draw = false;
     }
 
     fn on_start(&mut self, helper: &mut WindowHelper<UxnEvent>, _info: WindowStartupInfo) {
@@ -182,12 +220,62 @@ impl<J: instruction::InstructionFactory, K: Write, L: Write, M: Write>  WindowHa
     ) {
         match user_event {
             UxnEvent::ScreenRefresh => {
-                if self.devices.screen_device.get_draw_required(&self.uxn) {
-                    helper.request_redraw();
+
+                if !self.pending_draw {
+                    let screen_vector = self.devices.screen_device.read_vector();
+                    
+                    #[cfg(debug_assertions)]
+                    let now = Instant::now();
+
+                    let device_list = construct_device_list(&mut self.devices);
+
+                    #[cfg(debug_assertions)]
+                    {
+                        self.construct_device_list_time += now.elapsed();
+                        self.construct_device_list_calls += 1;
+                        if self.construct_device_list_calls == 100 {
+                            println!("construct device list time: {:?}", self.construct_device_list_time);
+                            self.construct_device_list_time = Default::default();
+                            self.construct_device_list_calls = 0;
+                        }
+                    }
+
+                    #[cfg(debug_assertions)]
+                    let now = Instant::now();
+
+                    let res = self.uxn.run(screen_vector, device_list);
+
+                    #[cfg(debug_assertions)]
+                    {
+                        self.execute_vector_time += now.elapsed();
+                        self.execute_vector_calls += 1;
+                        if self.execute_vector_calls == 100 {
+                            println!("execute vector time: {:?}", self.execute_vector_time);
+                            self.execute_vector_time = Default::default();
+                            self.execute_vector_calls = 0;
+                        }
+                    }
+
+                    match res {
+                        Ok(UxnStatus::Terminate) => {
+                            // gracefully close
+                            helper.terminate_loop();
+                        },
+                        Ok(UxnStatus::Halt) => {
+                            // continue rendering the screen
+                        },
+                        Err(e) => {
+                            println!("{}", e);
+                            helper.terminate_loop();
+                        },
+                    }
+
                 }
 
-                let screen_vector = self.devices.screen_device.read_vector();
-                self.execute_vector(screen_vector, helper);
+                if self.devices.screen_device.get_draw_required(&self.uxn) {
+                    helper.request_redraw();
+                    self.pending_draw = true;
+                }
             },
             UxnEvent::ConsoleInputEvent(c) => {
                 self.devices.console_device.provide_input(c);
@@ -394,6 +482,24 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     });
 
     window.run_loop(MyWindowHandler{
-        uxn, devices: emu_devices
+        uxn, devices: emu_devices, pending_draw: false,
+ 
+        #[cfg(debug_assertions)]
+        draw_calls: 0,
+
+        #[cfg(debug_assertions)]
+        draw_time: Default::default(),
+
+        #[cfg(debug_assertions)]
+        construct_device_list_calls: 0,
+
+        #[cfg(debug_assertions)]
+        construct_device_list_time: Default::default(),
+
+        #[cfg(debug_assertions)]
+        execute_vector_calls:0,
+
+        #[cfg(debug_assertions)]
+        execute_vector_time: Default::default(),
     });
 }
