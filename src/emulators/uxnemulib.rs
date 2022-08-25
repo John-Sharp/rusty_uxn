@@ -1,6 +1,5 @@
 use clap::Parser;
 use std::error::Error;
-use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -29,6 +28,8 @@ use std::io::Write;
 use crate::instruction;
 use crate::emulators::uxn;
 
+use crate::emulators::RomReadError;
+
 #[cfg(debug_assertions)]
 use std::time::Instant;
 #[cfg(debug_assertions)]
@@ -51,19 +52,6 @@ pub struct Cli {
 pub struct Config<J: Write> {
     pub stderr_writer: J,
 }
-
-#[derive(Debug)]
-pub struct RomReadError {
-    fname: String,
-}
-
-impl fmt::Display for RomReadError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Error opening ROM: {}", self.fname)
-    }
-}
-
-impl Error for RomReadError {}
 
 struct EmuDevices<J: Write, K: Write, M: Write> {
     console_device: Console<J, K>,

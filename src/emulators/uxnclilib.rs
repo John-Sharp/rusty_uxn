@@ -1,6 +1,5 @@
 use clap::Parser;
 use std::error::Error;
-use std::fmt;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Read;
@@ -11,6 +10,7 @@ use crate::ops::OpObjectFactory;
 use crate::emulators::devices::console::Console;
 use crate::emulators::devices::file::FileDevice;
 use crate::emulators::devices::datetime::DateTimeDevice;
+use crate::emulators::RomReadError;
 
 use crate::emulators::devices::device_list_impl::{DeviceListImpl, DeviceEntry};
 use std::io::Write;
@@ -35,20 +35,6 @@ pub struct Config<J: Write, K: Read, L: Write, M: Write> {
     pub stderr_writer: L, // used by console device for stderr
     pub debug_writer: M,  // used by system device for debug output
 }
-
-// TODO share this with uxnemu
-#[derive(Debug)]
-pub struct RomReadError {
-    fname: String,
-}
-
-impl fmt::Display for RomReadError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Error opening ROM: {}", self.fname)
-    }
-}
-
-impl Error for RomReadError {}
 
 struct CliDevices<J: Write, K: Write, M: Write> {
     console_device: Console<J, K>,
