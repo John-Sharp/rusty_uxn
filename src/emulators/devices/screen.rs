@@ -55,6 +55,34 @@ impl Layer {
     }
 }
 
+fn get_palette(choice: u8) -> [UxnColorIndex; 4] {
+    if choice > 0xf {
+        panic!("get_palette called with invalid palette choice");
+    }
+
+    const PALETTES: [[UxnColorIndex; 4]; 16] = [
+        [UxnColorIndex::Zero, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+        [UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+        [UxnColorIndex::Zero, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+        [UxnColorIndex::Zero, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+        [UxnColorIndex::One, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+        [UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+        [UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+        [UxnColorIndex::One, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+        [UxnColorIndex::Two, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+        [UxnColorIndex::Two, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+        [UxnColorIndex::Zero, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+        [UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+        [UxnColorIndex::Three, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
+        [UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
+        [UxnColorIndex::Three, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
+        [UxnColorIndex::Zero, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
+    ];
+
+    return PALETTES[choice as usize].clone();
+}
+
+
 pub struct ScreenDevice {
     vector: [u8; 2],
     layers: [Layer; 2],
@@ -133,34 +161,6 @@ impl ScreenDevice {
         }
     }
 
-    // TODO doesn't need to be a method
-    fn get_palette(&self, choice: u8) -> [UxnColorIndex; 4] {
-        if choice > 0xf {
-            panic!("get_palette called with invalid palette choice");
-        }
-
-        let palettes = [
-            [UxnColorIndex::Zero, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
-            [UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
-            [UxnColorIndex::Zero, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
-            [UxnColorIndex::Zero, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
-            [UxnColorIndex::One, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
-            [UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
-            [UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
-            [UxnColorIndex::One, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
-            [UxnColorIndex::Two, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
-            [UxnColorIndex::Two, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
-            [UxnColorIndex::Zero, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
-            [UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
-            [UxnColorIndex::Three, UxnColorIndex::Zero, UxnColorIndex::One, UxnColorIndex::Two,],
-            [UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two, UxnColorIndex::Three,],
-            [UxnColorIndex::Three, UxnColorIndex::Two, UxnColorIndex::Three, UxnColorIndex::One,],
-            [UxnColorIndex::Zero, UxnColorIndex::Three, UxnColorIndex::One, UxnColorIndex::Two,],
-        ];
-
-        return palettes[choice as usize].clone();
-    }
-
     fn sprites_write(&mut self, val: u8, main_ram: &mut dyn MainRamInterface) {
         let palette_choice = val & 0xf;
         let flip_x = if (val & 0x10) != 0 { true } else { false };
@@ -174,7 +174,7 @@ impl ScreenDevice {
         let mut sprite_address = u16::from_be_bytes(
             [self.sprite_address[0], self.sprite_address[1]]);
 
-        let palette = self.get_palette(palette_choice);
+        let palette = get_palette(palette_choice);
 
         let mut target_x = u16::from_be_bytes(
             [self.target_location[0][0], self.target_location[0][1]]);
