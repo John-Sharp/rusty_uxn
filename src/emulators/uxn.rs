@@ -210,11 +210,6 @@ J: InstructionFactory,
         return_stack: Vec::new(), instruction_factory, system_colors, should_terminate});
     }
 
-    // TODO pass in device list object to this function
-    // execute with an object that implements Uxn but 
-    // has owns mutable reference to device list. write_to_device
-    // uses this list, all other functions are the same
-    // at end of run the object goes out of scope
     pub fn run<K: DeviceList>(&mut self, vector: u16, devices: K) -> Result<UxnStatus, UxnError>
     {
         // vector of zero means that nothing should be done (it is what devices have as their
