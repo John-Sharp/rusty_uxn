@@ -1,3 +1,5 @@
+//! emu
+
 use clap::Parser;
 use std::io;
 

@@ -1,3 +1,5 @@
+#![doc=include_str!("../README.md")]
+
 pub mod uxninterface;
 pub mod instruction;
 pub mod ops;
