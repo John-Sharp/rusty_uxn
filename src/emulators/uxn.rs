@@ -202,7 +202,6 @@ J: InstructionFactory,
             *ram_loc = val;
         }
 
-        // TODO figure out the default colors
         let system_colors = [0x0, 0x0, 0x0, 0x0, 0x0, 0x0];
 
         let should_terminate = false;
