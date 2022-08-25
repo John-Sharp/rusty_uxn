@@ -136,7 +136,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(jmp_val)]));
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([Ok(0x23)]));
 
-        jmp_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        jmp_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -155,7 +155,7 @@ mod tests {
         mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([
           Ok(()), Ok(())]));
 
-        jmp_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        jmp_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -180,7 +180,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(jmp_val)]));
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([Ok(0xffff)]));
 
-        let ret = jmp_handler(Box::new(&mut mock_uxn), false, false, false);
+        let ret = jmp_handler(&mut mock_uxn, false, false, false);
 
         assert_eq!(
             ret,
@@ -197,7 +197,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(jmp_val), Ok(0x01)]));
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([Ok(0x23)]));
 
-        jcn_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        jcn_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -217,7 +217,7 @@ mod tests {
 
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(jmp_val), Ok(0x00)]));
 
-        jcn_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        jcn_handler(&mut mock_uxn, false, false, false).unwrap();
         assert_eq!(
             mock_uxn
                 .set_program_counter_arguments_received
@@ -234,7 +234,7 @@ mod tests {
         mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([
           Ok(()), Ok(()), Ok(()),]));
 
-        jcn_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        jcn_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -263,7 +263,7 @@ mod tests {
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa23)]));
         mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()),]));
 
-        jsr_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        jsr_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -293,7 +293,7 @@ mod tests {
           Ok(()), Ok(()),]));
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([Ok(0x0102),]));
 
-        jsr_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        jsr_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -329,7 +329,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(jmp_val)]));
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([Ok(0xffff)]));
 
-        let ret = jsr_handler(Box::new(&mut mock_uxn), false, false, false);
+        let ret = jsr_handler(&mut mock_uxn, false, false, false);
 
         assert_eq!(
             ret,
@@ -342,7 +342,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xcd)]));
         mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(())]));
 
-        sth_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        sth_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -360,7 +360,7 @@ mod tests {
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()),]));
         mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()),]));
 
-        sth_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        sth_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn

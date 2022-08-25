@@ -334,7 +334,7 @@ mod tests {
         is_terminate_instruction: bool,
     }
     impl Instruction for MockInstruction {
-        fn execute(&self, uxn: Box::<&mut dyn UxnWithDevices>) -> Result<(), UxnError> {
+        fn execute(&self, uxn: &mut dyn UxnWithDevices) -> Result<(), UxnError> {
             if self.is_terminate_instruction {
                 uxn.write_to_device(0x99, 0x99);
             }

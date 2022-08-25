@@ -121,7 +121,7 @@ mod tests {
             Ok(()),
         ]));
 
-        add_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        add_handler(&mut mock_uxn, false, false, false).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_working_stack_arguments_received
@@ -149,7 +149,7 @@ mod tests {
             Ok(()),
         ]));
 
-        add_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        add_handler(&mut mock_uxn, true, true, true).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_return_stack_arguments_received
@@ -177,7 +177,7 @@ mod tests {
             Ok(()),
         ]));
 
-        sub_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        sub_handler(&mut mock_uxn, false, false, false).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_working_stack_arguments_received
@@ -205,7 +205,7 @@ mod tests {
             Ok(()),
         ]));
 
-        sub_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        sub_handler(&mut mock_uxn, true, true, true).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_return_stack_arguments_received
@@ -233,7 +233,7 @@ mod tests {
             Ok(()),
         ]));
 
-        mul_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        mul_handler(&mut mock_uxn, false, false, false).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_working_stack_arguments_received
@@ -261,7 +261,7 @@ mod tests {
             Ok(()),
         ]));
 
-        mul_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        mul_handler(&mut mock_uxn, true, true, true).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_return_stack_arguments_received
@@ -289,7 +289,7 @@ mod tests {
             Ok(()),
         ]));
 
-        div_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        div_handler(&mut mock_uxn, false, false, false).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_working_stack_arguments_received
@@ -317,7 +317,7 @@ mod tests {
             Ok(()),
         ]));
 
-        div_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        div_handler(&mut mock_uxn, true, true, true).unwrap();
         assert_eq!(
             mock_uxn
                 .push_to_return_stack_arguments_received

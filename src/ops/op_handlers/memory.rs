@@ -277,7 +277,7 @@ mod tests {
         mock_uxn.push_to_working_stack_values_to_return =  RefCell::new(VecDeque::from([Ok(())]));
         mock_uxn.read_from_ram_values_to_return =  RefCell::new(VecDeque::from([0x15]));
 
-        ldz_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        ldz_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn.read_from_ram_arguments_received.into_inner(),
@@ -300,7 +300,7 @@ mod tests {
             Ok(()), Ok(()), Ok(()),]));
         mock_uxn.read_from_ram_values_to_return =  RefCell::new(VecDeque::from([0x15, 0x26]));
 
-        ldz_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        ldz_handler(&mut mock_uxn, true, true, true).unwrap();
         assert_eq!(
             mock_uxn.read_from_ram_arguments_received.into_inner(),
             VecDeque::from([(0x00a1,), (0x00a2,)])
@@ -319,7 +319,7 @@ mod tests {
             Ok(0xbb), // value to store at address
         ]));
 
-        stz_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        stz_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn.write_to_ram_arguments_received.into_inner(),
@@ -338,7 +338,7 @@ mod tests {
         mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([
             Ok(()), Ok(()), Ok(()),]));
 
-        stz_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        stz_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn.write_to_ram_arguments_received.into_inner(),
@@ -367,7 +367,7 @@ mod tests {
         mock_uxn.read_from_ram_values_to_return = RefCell::new(VecDeque::from([
             0xcc]));
 
-        ldr_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        ldr_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn.push_to_working_stack_arguments_received.into_inner(),
@@ -395,7 +395,7 @@ mod tests {
         mock_uxn.read_from_ram_values_to_return = RefCell::new(VecDeque::from([
             0xcc, 0xbb]));
 
-        ldr_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        ldr_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn.push_to_return_stack_arguments_received.into_inner(),
@@ -421,7 +421,7 @@ mod tests {
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([
             Ok(0xdd)]));
 
-        str_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        str_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn.write_to_ram_arguments_received.into_inner(),
@@ -443,7 +443,7 @@ mod tests {
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([
             Ok(0x09)]));
 
-        let res = str_handler(Box::new(&mut mock_uxn), false, false, false);
+        let res = str_handler(&mut mock_uxn, false, false, false);
 
         assert_eq!(
             Err(UxnError::OutOfRangeMemoryAddress),
@@ -465,7 +465,7 @@ mod tests {
         mock_uxn.get_program_counter_values_to_return = RefCell::new(VecDeque::from([
             Ok(0xfffc)]));
 
-        let res = str_handler(Box::new(&mut mock_uxn), false, false, false);
+        let res = str_handler(&mut mock_uxn, false, false, false);
 
         assert_eq!(
             Err(UxnError::OutOfRangeMemoryAddress),
@@ -493,7 +493,7 @@ mod tests {
             Ok(()),
         ]));
 
-        str_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        str_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn.write_to_ram_arguments_received.into_inner(),
@@ -516,7 +516,7 @@ mod tests {
         mock_uxn.read_from_ram_values_to_return = RefCell::new(VecDeque::from([0xc3])); // value 'read from ram'
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(())]));
 
-        lda_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        lda_handler(&mut mock_uxn, false, false, false).unwrap();
 
         // handler should attempt to read from the address constructed out of
         // bytes it popped from the stack
@@ -548,7 +548,7 @@ mod tests {
 
         mock_uxn.read_from_ram_values_to_return = RefCell::new(VecDeque::from([0xd3, 0xd4])); // short that is 'read from ram'
 
-        lda_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        lda_handler(&mut mock_uxn, true, true, true).unwrap();
 
         // handler should attempt to read from the address constructed out of
         // bytes it popped from the stack, and then from (address+1)
@@ -584,7 +584,7 @@ mod tests {
         mock_uxn.read_from_ram_values_to_return = RefCell::new(VecDeque::from([0xaa, 0xaa])); // short that would be 'read from ram'
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(())]));
 
-        let result = lda_handler(Box::new(&mut mock_uxn), false, true, false);
+        let result = lda_handler(&mut mock_uxn, false, true, false);
 
         assert_eq!(result, Err(UxnError::OutOfRangeMemoryAddress));
     }
@@ -599,7 +599,7 @@ mod tests {
             Ok(0xcc), // value to store at address
         ]));
 
-        sta_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        sta_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn.write_to_ram_arguments_received.into_inner(),
@@ -624,7 +624,7 @@ mod tests {
           Ok(()),
         ]));
 
-        sta_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        sta_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn.write_to_ram_arguments_received.into_inner(),
@@ -649,7 +649,7 @@ mod tests {
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(())]));
         mock_uxn.read_from_device_values_to_return = RefCell::new(VecDeque::from([Ok(0xbb)]));
 
-        dei_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        dei_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn.read_from_device_arguments_received.into_inner(),
@@ -670,7 +670,7 @@ mod tests {
         mock_uxn.push_to_return_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()), Ok(()), Ok(()),]));
         mock_uxn.read_from_device_values_to_return = RefCell::new(VecDeque::from([Ok(0xbb), Ok(0xcc),]));
 
-        dei_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        dei_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn.read_from_device_arguments_received.into_inner(),
@@ -690,7 +690,7 @@ mod tests {
             Ok(0xba), // should be used as value to write
         ]));
 
-        deo_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        deo_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -715,7 +715,7 @@ mod tests {
         mock_uxn.push_to_working_stack_values_to_return =
             RefCell::new(VecDeque::from([Ok(()), Ok(())]));
 
-        deo_handler(Box::new(&mut mock_uxn), true, false, false).unwrap();
+        deo_handler(&mut mock_uxn, true, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -751,7 +751,7 @@ mod tests {
         mock_uxn.push_to_return_stack_values_to_return =
             RefCell::new(VecDeque::from([Ok(()), Ok(()), Ok(())]));
 
-        deo_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        deo_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn

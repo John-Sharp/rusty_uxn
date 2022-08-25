@@ -143,7 +143,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xaa),]));
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()),]));
 
-        equ_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        equ_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -162,7 +162,7 @@ mod tests {
           Ok(()), Ok(()),
           Ok(()),]));
 
-        equ_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        equ_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -181,7 +181,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0xaa), Ok(0xaa),]));
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()),]));
 
-        neq_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        neq_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -200,7 +200,7 @@ mod tests {
           Ok(()), Ok(()),
           Ok(()),]));
 
-        neq_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        neq_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -219,7 +219,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0x03), Ok(0x05),]));
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()),]));
 
-        gth_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        gth_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -238,7 +238,7 @@ mod tests {
           Ok(()), Ok(()),
           Ok(()),]));
 
-        gth_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        gth_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -257,7 +257,7 @@ mod tests {
         mock_uxn.pop_from_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(0x03), Ok(0x05),]));
         mock_uxn.push_to_working_stack_values_to_return = RefCell::new(VecDeque::from([Ok(()),]));
 
-        lth_handler(Box::new(&mut mock_uxn), false, false, false).unwrap();
+        lth_handler(&mut mock_uxn, false, false, false).unwrap();
 
         assert_eq!(
             mock_uxn
@@ -276,7 +276,7 @@ mod tests {
           Ok(()), Ok(()),
           Ok(()),]));
 
-        lth_handler(Box::new(&mut mock_uxn), true, true, true).unwrap();
+        lth_handler(&mut mock_uxn, true, true, true).unwrap();
 
         assert_eq!(
             mock_uxn
