@@ -9,6 +9,8 @@ use crate::emulators::devices::system::{UxnSystemInterface, UxnSystemColor};
 use crate::emulators::devices::screen::UxnSystemScreenInterface;
 use crate::uxninterface::{Uxn, UxnError, UxnStatus, UxnWithDevices};
 
+const STACK_MAX_LEN : usize = 0xff;
+
 struct UxnWithDevicesImpl<'a, J, K>
     where J: Uxn + UxnSystemInterface,
           K: DeviceList,
@@ -165,24 +167,38 @@ J: InstructionFactory,
         self.program_counter = Ok(addr);
     }
 
-    // TODO check for stack overflow
     fn push_to_return_stack(&mut self, byte: u8) -> Result<(), UxnError> {
+        if self.return_stack.len() == STACK_MAX_LEN {
+            return Err(UxnError::StackOverflow);
+        }
+
         self.return_stack.push(byte);
         Ok(())
     }
 
     fn push_to_working_stack(&mut self, byte: u8) -> Result<(), UxnError> {
+        if self.working_stack.len() == STACK_MAX_LEN {
+            return Err(UxnError::StackOverflow);
+        }
+
         self.working_stack.push(byte);
         Ok(())
     }
 
-    // TODO check for stack underflow
     fn pop_from_working_stack(&mut self) -> Result<u8, UxnError> {
-        Ok(self.working_stack.pop().unwrap())
+        if let Some(v) = self.working_stack.pop() {
+            return Ok(v);
+        }
+
+        Err(UxnError::StackUnderflow)
     }
 
     fn pop_from_return_stack(&mut self) -> Result<u8, UxnError> {
-        Ok(self.return_stack.pop().unwrap())
+        if let Some(v) = self.return_stack.pop() {
+            return Ok(v);
+        }
+
+        Err(UxnError::StackUnderflow)
     }
 }
 
@@ -755,6 +771,35 @@ mod tests {
         uxn.set_return_stack_index(1);
 
         assert_eq!(uxn.return_stack, vec!(0x4,));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_stack_overflow() -> Result<(), UxnError> {
+        let mut uxn = UxnImpl::new(
+            vec!().into_iter(),
+            MockInstructionFactory::new(0xff))?;
+
+        for _ in 0..STACK_MAX_LEN {
+            uxn.push_to_working_stack(0x1)?;
+            uxn.push_to_return_stack(0x1)?;
+        }
+
+        assert_eq!(uxn.push_to_working_stack(0x1), Err(UxnError::StackOverflow));
+        assert_eq!(uxn.push_to_return_stack(0x1), Err(UxnError::StackOverflow));
+
+        return Ok(());
+    }
+
+    #[test]
+    fn test_stack_underflow() -> Result<(), UxnError> {
+        let mut uxn = UxnImpl::new(
+            vec!().into_iter(),
+            MockInstructionFactory::new(0xff))?;
+
+        assert_eq!(uxn.pop_from_working_stack(), Err(UxnError::StackUnderflow));
+        assert_eq!(uxn.pop_from_return_stack(), Err(UxnError::StackUnderflow));
 
         Ok(())
     }
