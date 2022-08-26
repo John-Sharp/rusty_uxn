@@ -1,0 +1,64 @@
+%HALT { #010f DEO }
+
+( devices )
+|10 @Console [ &vector $2 &read $1 &pad $5 &write $1 &error $1 ]
+
+|0
+@uname-len $1
+@uname
+
+|100
+;on-stdin .Console/vector DEO2
+#00 .uname-len STZ (initialise uname-len)
+
+( print the intro )
+;intro-string
+&while 
+    ( send ) LDAk .Console/write DEO
+    ( loop ) INC2 LDAk ,&while JCN
+    POP2
+
+BRK
+
+@on-stdin ( -> )
+    .Console/read DEI DUP
+
+    #0a EQU ;read-complete JCN2
+
+    .uname .uname-len LDZ ADD STZ
+      (store character just read into memory pointed to by uname + uname-len)
+
+    .uname-len LDZ INC .uname-len STZ
+BRK
+
+@read-complete
+    POP
+    #00 ,&i STR
+
+    ( print the greeting preamble )
+    ;greeting-preamble
+    &while 
+        ( send ) LDAk .Console/write DEO
+        ( loop ) INC2 LDAk ,&while JCN
+        POP2
+
+    ( print the name previously entered )
+    &while2
+        .uname ,&i LDR ADD LDZ .Console/write DEO
+
+        ,&i LDR INC ,&i STR
+
+        ,&i LDR .uname-len LDZ NEQ  ,&while2 JCN
+
+    #0a .Console/write DEO
+
+    #00 .uname-len STZ
+    BRK
+
+    &i $1
+
+@intro-string
+"Type 20 "your 20 "name 0a 00
+
+@greeting-preamble
+"Hello, 20 00

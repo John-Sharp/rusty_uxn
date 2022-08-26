@@ -20,7 +20,7 @@ fn push_and_debug() {
 
     fs::write(&tmp_file_path, &prog).expect("Failed to write test program");
 
-    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: "".to_string()};
+    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: Vec::new()};
     let mut stdout_output = Vec::new();
     let stdin_input = Cursor::new("");
     let mut stderr_output = Vec::new();
@@ -131,7 +131,7 @@ fn console_test() {
 
     fs::write(&tmp_file_path, &prog).expect("Failed to write test program");
 
-    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: "first".to_string()};
+    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: vec!{"first".to_string()}};
     let mut stdout_output = Vec::new();
     let stdin_input = Cursor::new(" secondq");
     let mut stderr_output = Vec::new();
@@ -146,7 +146,7 @@ fn console_test() {
     
     // the debug output should be printed to the debug_writer and should give the contents of the working
     // stack followed by the contents of the return stack
-    assert_eq!(String::from_utf8(stdout_output).unwrap(), "Hello, first second");
+    assert_eq!(String::from_utf8(stdout_output).unwrap(), "Hello, first\n second");
     assert_eq!(String::from_utf8(stderr_output).unwrap(), "Error test");
 }
 
@@ -252,7 +252,7 @@ fn datetime_test() {
 
     fs::write(&tmp_file_path, &prog).expect("Failed to write test program");
 
-    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: "".to_string()};
+    let cli_options = uxnclilib::Cli{rom: tmp_file_path, input: Vec::new()};
     let mut stdout_output = Vec::new();
     let stdin_input = Cursor::new("");
     let mut stderr_output = Vec::new();

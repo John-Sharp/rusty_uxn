@@ -1,0 +1,72 @@
+%RTN { JMP2r }
+%HALT { #010f DEO }
+%EMIT { .Console/write DEO }
+
+( devices )
+|10 @Console [ &vector $2 &read $1 &pad $5 &write $1 &error $1 ]
+|c0 @Datetime   [ &year   $2 &month    $1 &day    $1 &hour  $1 &minute $1 &second $1 &dotw $1 &doty $2 &isdst $1 ]
+
+|100
+( read day )
+.Datetime/day DEI
+;byte-to-console JSR2
+
+LIT '/ EMIT
+
+( read month )
+.Datetime/month DEI #01 ADD
+;byte-to-console JSR2
+
+LIT '/ .Console/write DEO
+
+( read year )
+.Datetime/year DEI2
+;short-to-console JSR2
+
+#0a .Console/write DEO
+
+HALT
+BRK
+
+@byte-to-console ( byte -- )
+
+  #0a SWP DUP 
+
+  &start-loop
+  #0a DIV #00 EQU ,&exit-loop JCN 
+
+    DUP DUP #0a DIV #0a MUL SUB
+    SWP #0a DIV DUP
+    ,&start-loop JMP
+  &exit-loop
+
+  &start-loop2
+  DUP #0a EQU ,&exit-loop2 JCN 
+    #30 ADD EMIT
+    ,&start-loop2 JMP
+  &exit-loop2
+  POP
+
+RTN
+
+
+@short-to-console ( short -- )
+
+  #000a SWP2 DUP2 
+
+  &start-loop
+  #000a DIV2 #0000 EQU2 ,&exit-loop JCN 
+
+    DUP2 DUP2 #000a DIV2 #000a MUL2 SUB2
+    SWP2 #000a DIV2 DUP2
+    ,&start-loop JMP
+  &exit-loop
+
+  &start-loop2
+  DUP2 #000a EQU2 ,&exit-loop2 JCN 
+    #30 ADD EMIT POP
+    ,&start-loop2 JMP
+  &exit-loop2
+  POP2
+
+RTN
