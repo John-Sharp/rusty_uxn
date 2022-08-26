@@ -25,8 +25,7 @@ pub struct Cli {
     pub rom: std::path::PathBuf,
 
     /// Initial console input for uxn virtual machine
-    #[clap(default_value_t = String::from(""))]
-    pub input: String,
+    pub input: Vec<String>,
 }
 
 pub struct Config<J: Write, K: Read, L: Write, M: Write> {
@@ -89,14 +88,17 @@ pub fn run<J: Write, K: Read, L: Write, M: Write>(cli_config: Cli, other_config:
 
     // for the input given on the command line, make each byte of it, in turn, available through
     // the console device and trigger the console input vector
-    for c in cli_config.input.bytes() {
-        cli_devices.console_device.provide_input(c);
-        let console_vector = cli_devices.console_device.read_vector();
-        let res = uxn.run(console_vector, construct_device_list(&mut cli_devices))?;
+    for input in cli_config.input {
+        for c in input.bytes().chain("\n".bytes()) { 
+            cli_devices.console_device.provide_input(c);
 
-        match res {
-            UxnStatus::Terminate => { return Ok(()); },
-            UxnStatus::Halt => {},
+            let console_vector = cli_devices.console_device.read_vector();
+            let res = uxn.run(console_vector, construct_device_list(&mut cli_devices))?;
+
+            match res {
+                UxnStatus::Terminate => { return Ok(()); },
+                UxnStatus::Halt => {},
+            }
         }
     }
 

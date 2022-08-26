@@ -45,8 +45,7 @@ pub struct Cli {
     pub rom: std::path::PathBuf,
 
     /// Initial console input for uxn virtual machine
-    #[clap(default_value_t = String::from(""))]
-    pub input: String,
+    pub input: Vec<String>,
 }
 
 pub struct Config<J: Write> {
@@ -438,14 +437,16 @@ pub fn run<J: Write + 'static>(cli_config: Cli, other_config: Config<J>) -> Resu
     }
 
     // for input given on command line
-    for c in cli_config.input.bytes() {
-        emu_devices.console_device.provide_input(c);
-        let console_vector = emu_devices.console_device.read_vector();
-        let res = uxn.run(console_vector, construct_device_list(&mut emu_devices))?;
+    for input in cli_config.input {
+        for c in input.bytes().chain("\n".bytes()) {
+            emu_devices.console_device.provide_input(c);
+            let console_vector = emu_devices.console_device.read_vector();
+            let res = uxn.run(console_vector, construct_device_list(&mut emu_devices))?;
 
-        match res {
-            UxnStatus::Terminate => { return Ok(()); },
-            UxnStatus::Halt => {},
+            match res {
+                UxnStatus::Terminate => { return Ok(()); },
+                UxnStatus::Halt => {},
+            }
         }
     }
 
