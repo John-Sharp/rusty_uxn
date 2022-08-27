@@ -104,3 +104,32 @@ mouse:
 uxnasm example_assets/emu/rabbit_test.tal rabbit_test.rom && \
 uxnemu rabbit_test.rom
 ```
+
+# spritemake
+
+The spritemake binary is a program for converting png images into a format that
+can be included in Tal assembly files and rendered as sprites.
+
+## Usage
+
+```bash
+USAGE:
+    spritemake <IMG_PATH>
+
+ARGS:
+    <IMG_PATH>    Path to image file to be used as basis of sprite
+
+OPTIONS:
+    -h, --help    Print help information
+```
+
+Note that the image provided should be of dimensions `(8n) * (8m+1)` where both
+`n` amd `m` are integers. The first four pixels of the image define the four Uxn
+system colors that this image uses, the rest of the image should only use these
+four colors. 
+
+What is produced is some Tal assembly defining a function and some data
+representing the png image in the Uxn sprite format. The function pops `x` and
+`y` coordinates off the working stack and will paint the image using `(x, y)`
+as the top left coordinate, constructing the image out of a series of `8x8`
+sprites.
