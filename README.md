@@ -8,7 +8,7 @@
 # installation
 
 ```bash
-cargo install --git file:/// --all-features
+cargo install --git https://github.com/John-Sharp/rusty_uxn.git --all-features
 ```
 
 # uxnasm
